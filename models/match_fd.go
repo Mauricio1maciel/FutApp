@@ -1,0 +1,29 @@
+package models
+
+type FDResponse struct {
+	Matches []FDMatch `json:"matches"`
+}
+
+type FDMatch struct {
+	ID       int    `json:"id"`
+	UTCDate  string `json:"utcDate"`
+	Status   string `json:"status"`
+	Matchday int    `json:"matchday"`
+
+	HomeTeam struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	} `json:"homeTeam"`
+
+	AwayTeam struct {
+		ID   int    `json:"id"`
+		Name string `json:"shortName"`
+	} `json:"awayTeam"`
+
+	Score struct {
+		FullTime struct {
+			Home *int `json:"home"`
+			Away *int `json:"away"`
+		} `json:"fullTime"`
+	} `json:"score"`
+}
