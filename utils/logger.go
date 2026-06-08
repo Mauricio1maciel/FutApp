@@ -7,7 +7,7 @@ import (
 
 var ActiveLogs = map[string]bool{
 	"WORKER":       false,
-	"DATABASE":     true,
+	"DATABASE":     false,
 	"API":          false,
 	"ESPN":         false,
 	"IMAGE_SEARCH": false,
