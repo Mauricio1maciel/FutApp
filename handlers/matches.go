@@ -71,53 +71,42 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		roundStr = strconv.Itoa(currentRoundInt)
 	}
 
+	// matches, err := database.GetMatchesByLeague(league, roundStr)
 	if canUpdate(forceUpdate) {
+		utils.CustomLog("API", "Atualizando dados da API em segundo plano: %s", league)
 
-		utils.CustomLog("API", "Atualizando dados da API: %s", league)
-
-		apiMatches, err := services.GetMatchesByLeagueCode(league)
-
-		if err != nil {
-			log.Println("❌ Erro ao buscar API:", err)
-		} else {
+		// A palavra 'go' cria uma "Goroutine".
+		// Ela solta esse bloco em uma thread separada e NÃO trava o resto do código!
+		go func(lg string) {
+			apiMatches, err := services.GetMatchesByLeagueCode(lg)
+			if err != nil {
+				log.Println("❌ Erro ao buscar API:", err)
+				return
+			}
 
 			for _, m := range apiMatches {
-
-				homeScore := 0
-				awayScore := 0
-
+				homeScore, awayScore := 0, 0
 				if m.Score.FullTime.Home != nil {
 					homeScore = *m.Score.FullTime.Home
 				}
-
 				if m.Score.FullTime.Away != nil {
 					awayScore = *m.Score.FullTime.Away
 				}
 
-				err := database.SaveMatch(
-					int64(m.ID),
-					league,
-					getSeasonFromDate(m.UTCDate),
-					m.Matchday,
-					int64(m.HomeTeam.ID),
-					int64(m.AwayTeam.ID),
-					homeScore,
-					awayScore,
-					m.UTCDate,
-					m.Status,
+				database.SaveMatch(
+					int64(m.ID), lg, getSeasonFromDate(m.UTCDate), m.Matchday,
+					int64(m.HomeTeam.ID), int64(m.AwayTeam.ID),
+					homeScore, awayScore, m.UTCDate, m.Status,
 				)
-
-				if err != nil {
-					log.Println("❌ Erro ao salvar:", err)
-				}
 			}
-		}
+			utils.CustomLog("API", "Atualização em segundo plano concluída para: %s", lg)
+		}(league) // Passamos a variável league como parâmetro para a Goroutine
 	} else {
 		log.Println("⏱ Limite de requisições atingido")
 	}
 
+	// O código CONTINUA IMEDIATAMENTE para cá, sem esperar os 380 inserts terminarem!
 	matches, err := database.GetMatchesByLeague(league, roundStr)
-
 	if err != nil {
 		log.Printf("Erro ao buscar jogos no banco: %v", err)
 		http.Error(w, "Erro ao buscar jogos", http.StatusInternalServerError)

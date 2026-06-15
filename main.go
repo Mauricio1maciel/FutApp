@@ -4,7 +4,7 @@ import (
 	"App-Futebol/database"
 	"App-Futebol/database/servico"
 	"App-Futebol/handlers"
-	"App-Futebol/middlewares" // 🔥 IMPORTANTE: Adicionado o pacote de middlewares
+	"App-Futebol/middlewares"
 	"App-Futebol/services"
 
 	"fmt"
@@ -27,10 +27,8 @@ func main() {
 	services.StartBackgroundUpdater()
 	servico.StartBackgroundScheduler()
 
-	// 🔓 ROTA PÚBLICA (Qualquer um pode bater aqui para gerar o crachá de acesso)
 	http.HandleFunc("/auth/guest", handlers.GuestAuthHandler)
 
-	// 🛡️ ROTAS PROTEGIDAS (O porteiro JWTAuth barra quem não tem o token)
 	http.HandleFunc("/search", middlewares.JWTAuth(handlers.GlobalSearchHandler))
 	http.HandleFunc("/details", middlewares.JWTAuth(handlers.DetailsHandler))
 
