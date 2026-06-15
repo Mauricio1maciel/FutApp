@@ -26,7 +26,8 @@ func Connect() {
 
 	// A URL deve ser montada exatamente assim:
 	// postgres://usuario:senha@host:port/dbname?params
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&prepareThreshold=0",
+	// Ajuste a string de conexão para isto:
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&prepareThreshold=0&binary_parameters=yes",
 		user, password, host, port, dbname)
 
 	db, err := sql.Open("postgres", connStr)
