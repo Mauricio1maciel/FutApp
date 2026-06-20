@@ -2,29 +2,31 @@ package handlers
 
 import (
 	"App-Futebol/database"
+	"App-Futebol/models" // Importante: Precisamos do pacote models aqui agora!
 	"App-Futebol/services"
 	"App-Futebol/utils"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 )
 
 func getSeasonByLeague(league string) string {
-	now := time.Now()
-	currentYear := now.Year()
-	currentMonth := now.Month()
+	t := time.Now()
 
-	switch league {
-	case "BSA":
-		return fmt.Sprintf("%d", currentYear)
-	case "PD", "PL", "SA", "BL1", "FL1":
-		if currentMonth >= time.July {
-			return fmt.Sprintf("%d-%d", currentYear, currentYear+1)
-		}
-		return fmt.Sprintf("%d-%d", currentYear-1, currentYear)
+	year := t.Year()
+	month := t.Month()
+
+	format := database.GetLeagueSeasonFormat(league)
+
+	if format == "calendar" {
+		return strconv.Itoa(year)
 	}
-	return fmt.Sprintf("%d", currentYear)
+
+	if month >= time.July {
+		return strconv.Itoa(year) + "-" + strconv.Itoa(year+1)
+	}
+	return strconv.Itoa(year-1) + "-" + strconv.Itoa(year)
 }
 
 var lastStandingsUpdate = make(map[string]time.Time)
@@ -42,6 +44,8 @@ func canUpdateStandingsBackground(league string) bool {
 
 func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 	league := r.URL.Query().Get("league")
+	forceUpdate := r.URL.Query().Get("update") == "true" // 🔥 RECUPERANDO O UPDATE DA URL!
+
 	if league == "" {
 		http.Error(w, "Informe a liga", http.StatusBadRequest)
 		return
@@ -49,28 +53,31 @@ func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 
 	season := getSeasonByLeague(league)
 
-	result, err := database.GetStandingsByLeague(league, season)
+	// Se NÃO forçou a atualização, tenta buscar do banco
+	if !forceUpdate {
+		result, err := database.GetStandingsByLeague(league, season)
 
-	if err == nil && len(result) > 0 {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
+		if err == nil && len(result) > 0 {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(result)
 
-		go processStandingsInBackground(league, season)
-		return
+			go processStandingsInBackground(league, season)
+			return
+		}
 	}
 
-	utils.CustomLog("API", "Tabela vazia. Calculando pela primeira vez: %s", league)
+	// Se chegou aqui, ou o banco está vazio, ou forçamos com ?update=true
+	utils.CustomLog("API", "Tabela vazia ou atualização forçada. Calculando: %s", league)
 	forceCalculateAndSaveStandings(league, season)
 
-	result, _ = database.GetStandingsByLeague(league, season)
+	result, _ := database.GetStandingsByLeague(league, season)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
 
 func processStandingsInBackground(league, season string) {
-	// A SUA IDEIA: Se o campeonato inteiro já acabou, não calcula NUNCA MAIS!
 	if database.IsLeagueFinished(league) {
-		utils.CustomLog("API", "Liga %s finalizada. Poupando CPU do Render.", league)
+		utils.CustomLog("API", "Liga %s finalizada. Poupando CPU.", league)
 		return
 	}
 
@@ -93,7 +100,14 @@ func forceCalculateAndSaveStandings(league, season string) {
 	zones, _ := database.GetZonesByLeague(league)
 	criteria, _ := database.GetTieBreakers(league, season)
 
-	standings := services.BuildStandings(matches, winners, rule, zones, criteria)
+	var standings []models.Standing
+
+	// 🔥 O DESVIO INTELIGENTE
+	if league == "WC" {
+		standings = services.BuildCupStandings(matches, criteria)
+	} else {
+		standings = services.BuildStandings(matches, winners, rule, zones, criteria)
+	}
 
 	for i := range standings {
 		standings[i].Season = season

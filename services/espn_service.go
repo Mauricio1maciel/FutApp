@@ -20,6 +20,7 @@ var ESPNLeagueMap = map[string]string{
 	"FL1": "fra.1",
 	"CLI": "conmebol.libertadores",
 	"CSU": "conmebol.sudamericana",
+	"WC":  "fifa.world",
 }
 
 func GetLiveScoreboard(leagueCode string, date string) ([]models.AppLiveMatch, error) {

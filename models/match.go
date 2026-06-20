@@ -20,6 +20,10 @@ type Match struct {
 	AwayScore int    `json:"away_score"`
 	DateEvent string `json:"date_event"`
 	Status    string `json:"status"`
-	HomeLogo  string `json:"home_logo"`
-	AwayLogo  string `json:"away_logo"`
+
+	Stage     string `json:"stage"`
+	GroupName string `json:"group_name"`
+
+	HomeLogo string `json:"home_logo"`
+	AwayLogo string `json:"away_logo"`
 }

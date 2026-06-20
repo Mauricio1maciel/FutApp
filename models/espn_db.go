@@ -16,6 +16,9 @@ type ESPNMatchDB struct {
 	AwayScore string `json:"away_score"`
 	Status    string `json:"status"`
 
+	Stage     string `json:"stage"`
+	GroupName string `json:"group_name"`
+
 	ESPNHomeTeamID int64  `json:"espn_home_team_id"`
 	ESPNAwayTeamID int64  `json:"espn_away_team_id"`
 	APIHomeTeamID  int64  `json:"api_home_team_id"`

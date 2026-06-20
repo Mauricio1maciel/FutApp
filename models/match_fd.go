@@ -9,6 +9,8 @@ type FDMatch struct {
 	UTCDate  string `json:"utcDate"`
 	Status   string `json:"status"`
 	Matchday int    `json:"matchday"`
+	Stage    string `json:"stage"`
+	Group    string `json:"group"`
 
 	HomeTeam struct {
 		ID   int    `json:"id"`

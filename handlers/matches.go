@@ -36,23 +36,24 @@ func canUpdate(force bool) bool {
 	return true
 }
 
-func getSeasonFromDate(dateStr string) string {
-
+func getSeasonFromDate(dateStr string, league string) string {
 	t, err := time.Parse(time.RFC3339, dateStr)
 	if err != nil {
-		return strconv.Itoa(time.Now().Year())
+		t = time.Now()
 	}
 
 	year := t.Year()
 	month := t.Month()
 
-	if month >= time.January && month <= time.December {
+	format := database.GetLeagueSeasonFormat(league)
+
+	if format == "calendar" {
+		return strconv.Itoa(year)
 	}
 
 	if month >= time.July {
 		return strconv.Itoa(year) + "-" + strconv.Itoa(year+1)
 	}
-
 	return strconv.Itoa(year-1) + "-" + strconv.Itoa(year)
 }
 
@@ -71,12 +72,9 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		roundStr = strconv.Itoa(currentRoundInt)
 	}
 
-	// matches, err := database.GetMatchesByLeague(league, roundStr)
 	if canUpdate(forceUpdate) {
 		utils.CustomLog("API", "Atualizando dados da API em segundo plano: %s", league)
 
-		// A palavra 'go' cria uma "Goroutine".
-		// Ela solta esse bloco em uma thread separada e NÃO trava o resto do código!
 		go func(lg string) {
 			apiMatches, err := services.GetMatchesByLeagueCode(lg)
 			if err != nil {
@@ -94,18 +92,20 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				database.SaveMatch(
-					int64(m.ID), lg, getSeasonFromDate(m.UTCDate), m.Matchday,
+					int64(m.ID), lg,
+					getSeasonFromDate(m.UTCDate, lg), // 🔥 CORREÇÃO: Passando 'lg' como segundo parâmetro!
+					m.Matchday,
 					int64(m.HomeTeam.ID), int64(m.AwayTeam.ID),
 					homeScore, awayScore, m.UTCDate, m.Status,
+					m.Stage, m.Group,
 				)
 			}
 			utils.CustomLog("API", "Atualização em segundo plano concluída para: %s", lg)
-		}(league) // Passamos a variável league como parâmetro para a Goroutine
+		}(league)
 	} else {
 		log.Println("⏱ Limite de requisições atingido")
 	}
 
-	// O código CONTINUA IMEDIATAMENTE para cá, sem esperar os 380 inserts terminarem!
 	matches, err := database.GetMatchesByLeague(league, roundStr)
 	if err != nil {
 		log.Printf("Erro ao buscar jogos no banco: %v", err)

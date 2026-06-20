@@ -19,6 +19,17 @@ type ESPNEvent struct {
 type ESPNCompetition struct {
 	Status      ESPNStatus       `json:"status"`
 	Competitors []ESPNCompetitor `json:"competitors"`
+
+	// ADICIONADO: A ESPN geralmente envia dados de "Fase" (ex: Oitavas, Final) no objeto Type
+	Type struct {
+		Name         string `json:"name"`
+		Abbreviation string `json:"abbreviation"`
+	} `json:"type"`
+
+	// ADICIONADO: A ESPN envia o grupo (ex: Group A) neste objeto em torneios internacionais
+	Group struct {
+		Name string `json:"name"`
+	} `json:"group"`
 }
 
 type ESPNStatus struct {
@@ -40,12 +51,16 @@ type ESPNCompetitor struct {
 }
 
 type AppLiveMatch struct {
-	MatchID        string `json:"match_id"`
-	LeagueName     string `json:"league_name"`
-	LeagueLogo     string `json:"league_logo"`
-	MatchDate      string `json:"match_date"`
-	State          string `json:"state"`
-	Clock          string `json:"clock"`
+	MatchID    string `json:"match_id"`
+	LeagueName string `json:"league_name"`
+	LeagueLogo string `json:"league_logo"`
+	MatchDate  string `json:"match_date"`
+	State      string `json:"state"`
+	Clock      string `json:"clock"`
+
+	Stage     string `json:"stage"`      // ADICIONADO: Para o Front-end saber a fase
+	GroupName string `json:"group_name"` // ADICIONADO: Para o Front-end saber o grupo
+
 	ESPNHomeTeamID string `json:"espn_home_team_id"`
 	HomeTeam       string `json:"home_team"`
 	HomeLogo       string `json:"home_logo"`

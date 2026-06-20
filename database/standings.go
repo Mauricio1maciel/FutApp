@@ -18,10 +18,11 @@ func SaveStandings(league string, season string, standings []models.Standing) er
 
 	for _, s := range standings {
 
+		// ADICIONADO: group_name no INSERT e o parâmetro $14
 		_, err := DB.Exec(`
             INSERT INTO standings
-            (league, position, team_id, played, wins, draws, losses, goals_for, goals_against, goal_diff, points, zone, season)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            (league, position, team_id, played, wins, draws, losses, goals_for, goals_against, goal_diff, points, zone, season, group_name)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
         `,
 			league,
 			s.Position,
@@ -36,6 +37,7 @@ func SaveStandings(league string, season string, standings []models.Standing) er
 			s.Points,
 			s.Zone,
 			season,
+			s.GroupName, // <-- O novo campo do grupo
 		)
 
 		if err != nil {
@@ -48,6 +50,7 @@ func SaveStandings(league string, season string, standings []models.Standing) er
 
 func GetStandingsByLeague(league string, season string) ([]models.Standing, error) {
 
+	// ADICIONADO: COALESCE(s.group_name, '') e a ordenação dupla no ORDER BY
 	rows, err := DB.Query(`
     SELECT 
         s.position,
@@ -62,11 +65,12 @@ func GetStandingsByLeague(league string, season string) ([]models.Standing, erro
         s.points,
         s.season,
         COALESCE(t.crest_url, ''),
-        COALESCE(s.zone, '')
+        COALESCE(s.zone, ''),
+        COALESCE(s.group_name, '')
     FROM standings s
     LEFT JOIN teams t ON s.team_id = t.api_id
     WHERE s.league = $1 AND s.season = $2
-    ORDER BY s.position ASC
+    ORDER BY s.group_name ASC, s.position ASC 
 `, league, season)
 
 	if err != nil {
@@ -95,6 +99,7 @@ func GetStandingsByLeague(league string, season string) ([]models.Standing, erro
 			&s.Season,
 			&s.CrestURL,
 			&s.Zone,
+			&s.GroupName,
 		)
 
 		if err != nil {

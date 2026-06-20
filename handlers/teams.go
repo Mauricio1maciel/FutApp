@@ -14,14 +14,15 @@ func getSmartSeason(league string) string {
 	year := now.Year()
 	month := now.Month()
 
-	if league == "BSA" || league == "CLI" || league == "CSU" {
+	format := database.GetLeagueSeasonFormat(league)
+
+	if format == "calendar" {
 		return strconv.Itoa(year)
 	}
 
 	if month >= time.July {
 		return strconv.Itoa(year) + "-" + strconv.Itoa(year+1)
 	}
-
 	return strconv.Itoa(year-1) + "-" + strconv.Itoa(year)
 }
 

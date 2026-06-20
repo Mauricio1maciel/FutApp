@@ -2,6 +2,7 @@ package models
 
 type Standing struct {
 	Position     int
+	GroupName    string
 	TeamID       int64
 	TeamName     string
 	Played       int
