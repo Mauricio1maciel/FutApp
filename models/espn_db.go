@@ -15,6 +15,7 @@ type ESPNMatchDB struct {
 	HomeScore string `json:"home_score"`
 	AwayScore string `json:"away_score"`
 	Status    string `json:"status"`
+	Clock     string `json:"clock,omitempty"`
 
 	Stage     string `json:"stage"`
 	GroupName string `json:"group_name"`
