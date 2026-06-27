@@ -7,8 +7,9 @@ import (
 
 func SearchTeamsGlobal(query string) ([]models.Team, error) {
 	rows, err := DB.Query(
-		`SELECT id, api_id, name, league, stadium, crest_url 
-         FROM teams 
+		`SELECT id, api_id, name, tl.league, stadium, crest_url 
+         FROM teams t
+		 JOIN team_leagues tl ON t.api_id  = tl.team_api_id
          WHERE unaccent(name) ILIKE unaccent('%' || $1 || '%') 
          LIMIT 5`,
 		query,
