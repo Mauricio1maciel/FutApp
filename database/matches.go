@@ -6,10 +6,10 @@ import (
 	"log"
 )
 
-func GetMatchesByLeague(league string, roundStr string) ([]models.Match, error) {
+func GetMatchesByLeague(league string, roundStr string, isCurrentRound bool) ([]models.Match, error) {
 	query := `
     SELECT 
-        COALESCE(0), 
+        COALESCE(e.espn_match_id::TEXT, 0::TEXT),  
         COALESCE(m.league, ''),
         COALESCE(l.name, ''), 
         COALESCE(l.logo_url, ''),
@@ -33,10 +33,21 @@ func GetMatchesByLeague(league string, roundStr string) ([]models.Match, error) 
     LEFT JOIN teams th ON m.api_home_team_id = th.api_id
     LEFT JOIN teams ta ON m.api_away_team_id = ta.api_id
     LEFT JOIN leagues l ON m.league = l.code_api
-    WHERE m.league = $1
+	 LEFT JOIN espn_matches e ON (
+        th.espn_team_id = e.espn_home_team_id 
+        AND ta.espn_team_id = e.espn_away_team_id
+        AND m.match_date::DATE = e.match_date::DATE
+    )
+    WHERE m.league = $1 
     `
 	if roundStr != "" {
-		query += ` AND round = ` + roundStr
+		query += ` AND m.round = ` + roundStr
+
+		if isCurrentRound && (league == "WC" || league == "CL" || league == "CLI") {
+			query += ` 
+               AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE
+               AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE <= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE + INTERVAL '1 day'`
+		}
 	}
 
 	query += ` ORDER BY m.match_date ASC`
@@ -97,8 +108,8 @@ func SaveMatch(
 	awayScore int,
 	date string,
 	status string,
-	stage string, // ADICIONADO
-	groupName string, // ADICIONADO
+	stage string,
+	groupName string,
 ) error {
 
 	query := `

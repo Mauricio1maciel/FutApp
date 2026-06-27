@@ -26,10 +26,9 @@ func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	if forceUpdate != "true" && nocache == "" {
 		historyDB, err := database.GetFullMatchFromDB(matchID)
 		if err == nil && historyDB != nil && len(historyDB.Lineups) > 0 {
-			// 🔥 SE A PARTIDA ESTÁ NO CACHE MAS ESTÁ AO VIVO, VAMOS BUSCAR O RELÓGIO ATUALIZADO
 			if historyDB.Match.Status == "in" {
 				utils.CustomLog("ESPN", "Jogo no cache está Ao Vivo. Atualizando o clock para %s", matchID)
-				services.UpdateLiveMatchClock(&historyDB.Match) // Função nova que criaremos!
+				services.UpdateLiveMatchClock(&historyDB.Match)
 			}
 			utils.CustomLog("DATABASE", "Cache encontrado para o jogo %s", matchID)
 			json.NewEncoder(w).Encode(historyDB)
@@ -52,7 +51,6 @@ func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 🔥 BUSCA O RELÓGIO ANTES DE SALVAR SE ESTIVER AO VIVO
 	if match.Status == "in" {
 		services.UpdateLiveMatchClock(&match)
 	}
@@ -65,7 +63,6 @@ func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	fullHistory, errFetch := database.GetFullMatchFromDB(matchID)
 
 	if errFetch == nil && fullHistory != nil {
-		// 🔥 GARANTE QUE O RELÓGIO ATUALIZADO VÁ PRO FRONTEND
 		if fullHistory.Match.Status == "in" {
 			fullHistory.Match.Clock = match.Clock
 		}

@@ -7,10 +7,12 @@ import (
 
 func GetTeamByApiID(apiID int64) (models.Team, error) {
 	var t models.Team
+	utils.CustomLog("DB_INFO", "Iniciando busca de detalhes para o ID: %d", apiID)
 
 	err := DB.QueryRow(
-		`SELECT id, api_id, name, league, stadium, crest_url 
-         FROM teams 
+		`SELECT id, api_id, name, tl.league, stadium, crest_url 
+         FROM teams t
+         join team_leagues tl on t.api_id  = tl.team_api_id
          WHERE api_id=$1 
          LIMIT 1`,
 		apiID,
@@ -22,6 +24,9 @@ func GetTeamByApiID(apiID int64) (models.Team, error) {
 		&t.Stadium,
 		&t.Crest,
 	)
+	if err != nil {
+		utils.CustomLog("DB_ERRO", "Erro ao buscar detalhes do jogador ID %d: %v\n", apiID, err)
+	}
 
 	return t, err
 }

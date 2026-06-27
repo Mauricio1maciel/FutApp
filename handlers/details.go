@@ -22,7 +22,7 @@ func DetailsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if entityType == "teams" {
+	if entityType == "team" || entityType == "teams" {
 		team, err := database.GetTeamByApiID(apiID)
 		if err != nil {
 			http.Error(w, "Erro ao buscar time", http.StatusInternalServerError)

@@ -67,9 +67,12 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Informe a liga (ex: BSA, PL, PD)", http.StatusBadRequest)
 		return
 	}
+
+	isCurrentRound := false
 	if roundStr == "" {
 		currentRoundInt, _ := database.GetCurrentRound(league)
 		roundStr = strconv.Itoa(currentRoundInt)
+		isCurrentRound = true
 	}
 
 	if canUpdate(forceUpdate) {
@@ -93,7 +96,7 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 
 				database.SaveMatch(
 					int64(m.ID), lg,
-					getSeasonFromDate(m.UTCDate, lg), // 🔥 CORREÇÃO: Passando 'lg' como segundo parâmetro!
+					getSeasonFromDate(m.UTCDate, lg),
 					m.Matchday,
 					int64(m.HomeTeam.ID), int64(m.AwayTeam.ID),
 					homeScore, awayScore, m.UTCDate, m.Status,
@@ -106,7 +109,7 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("⏱ Limite de requisições atingido")
 	}
 
-	matches, err := database.GetMatchesByLeague(league, roundStr)
+	matches, err := database.GetMatchesByLeague(league, roundStr, isCurrentRound)
 	if err != nil {
 		log.Printf("Erro ao buscar jogos no banco: %v", err)
 		http.Error(w, "Erro ao buscar jogos", http.StatusInternalServerError)

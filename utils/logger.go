@@ -9,11 +9,13 @@ var ActiveLogs = map[string]bool{
 	"WORKER":       false,
 	"DATABASE":     false,
 	"API":          false,
-	"ESPN":         true,
+	"ESPN":         false,
 	"IMAGE_SEARCH": false,
 	"BOT":          false,
 	"AUTH":         false,
 	"COPA":         false,
+	"DB_INFO":      false,
+	"DB_ERRO":      false,
 }
 
 func CustomLog(module string, format string, args ...interface{}) {

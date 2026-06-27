@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"App-Futebol/database"
-	"App-Futebol/models" // Importante: Precisamos do pacote models aqui agora!
+	"App-Futebol/models"
 	"App-Futebol/services"
 	"App-Futebol/utils"
 	"encoding/json"
@@ -44,7 +44,7 @@ func canUpdateStandingsBackground(league string) bool {
 
 func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 	league := r.URL.Query().Get("league")
-	forceUpdate := r.URL.Query().Get("update") == "true" // 🔥 RECUPERANDO O UPDATE DA URL!
+	forceUpdate := r.URL.Query().Get("update") == "true"
 
 	if league == "" {
 		http.Error(w, "Informe a liga", http.StatusBadRequest)
@@ -90,7 +90,7 @@ func processStandingsInBackground(league, season string) {
 }
 
 func forceCalculateAndSaveStandings(league, season string) {
-	matches, err := database.GetMatchesByLeague(league, "")
+	matches, err := database.GetMatchesByLeague(league, "", false)
 	if err != nil {
 		return
 	}
