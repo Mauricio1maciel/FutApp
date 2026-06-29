@@ -90,7 +90,7 @@ func processStandingsInBackground(league, season string) {
 }
 
 func forceCalculateAndSaveStandings(league, season string) {
-	matches, err := database.GetMatchesByLeague(league, "", false)
+	matches, err := database.GetMatchesByLeague(league, "", "", false)
 	if err != nil {
 		return
 	}

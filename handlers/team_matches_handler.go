@@ -19,6 +19,9 @@ func TeamMatchesHandler(w http.ResponseWriter, r *http.Request) {
 	if roundsStr == "" {
 		currentRoundInt, _ := database.GetCurrentRoundTeam(teamIDStr)
 		var roundsArray []string
+
+		roundsArray = append(roundsArray, "0")
+
 		for i := 0; i < 8; i++ {
 			roundsArray = append(roundsArray, strconv.Itoa(currentRoundInt+i))
 		}

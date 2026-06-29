@@ -4,9 +4,10 @@ import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
 	"log"
+	"strconv"
 )
 
-func GetMatchesByLeague(league string, roundStr string, isCurrentRound bool) ([]models.Match, error) {
+func GetMatchesByLeague(league string, roundStr string, dateStr string, isCurrentRound bool) ([]models.Match, error) {
 	query := `
     SELECT 
         COALESCE(e.espn_match_id::TEXT, 0::TEXT),  
@@ -40,8 +41,16 @@ func GetMatchesByLeague(league string, roundStr string, isCurrentRound bool) ([]
     )
     WHERE m.league = $1 
     `
-	if roundStr != "" {
-		query += ` AND m.round = ` + roundStr
+	// 🔥 LÓGICA DE FILTRO ALTERADA
+	if dateStr != "" {
+		// Se veio data, ignora rodada e fase. Pega só os jogos desse dia (no fuso BR)
+		query += ` AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE = '` + dateStr + `'::DATE`
+	} else if roundStr != "" {
+		if _, err := strconv.Atoi(roundStr); err == nil {
+			query += ` AND m.round = ` + roundStr
+		} else {
+			query += ` AND m.stage = '` + roundStr + `'`
+		}
 
 		if isCurrentRound && (league == "WC" || league == "CL" || league == "CLI") {
 			query += ` 
@@ -172,4 +181,25 @@ func GetCurrentRound(league string) (int, error) {
 	}
 
 	return round, nil
+}
+func GetCurrentPhase(league string) string {
+	var stage string
+
+	// 1. Tenta buscar a fase mais recente que já aconteceu
+	query := `
+        SELECT stage FROM matches 
+        WHERE league = $1 
+		  AND match_date >= NOW() 
+		  AND stage != ''
+		  AND stage NOT IN ('REGULAR_SEASON', 'GROUP_STAGE')
+        ORDER BY match_date ASC LIMIT 1
+    `
+	err := DB.QueryRow(query, league).Scan(&stage)
+
+	// 2. Se não achou (ou está na fase de grupos), retorna um valor que o sistema entenda como rodada atual
+	if err != nil {
+		return "CURRENT_ROUND" // Marcador para o handler saber que deve tratar como rodada numérica
+	}
+
+	return stage
 }

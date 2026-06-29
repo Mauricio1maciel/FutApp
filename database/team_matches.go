@@ -22,9 +22,11 @@ func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
         COALESCE(m.away_score, 0),
         COALESCE(m.match_date::TEXT, ''), 
         COALESCE(m.status, ''),
+		COALESCE(m.stage, ''),       -- ADICIONADO: Fase da competição
+        COALESCE(m.group_name, ''),
         COALESCE(th.crest_url, '') AS home_logo,
         COALESCE(ta.crest_url, '') AS away_logo
-    FROM matches m
+    FROM matches m 
     LEFT JOIN teams th ON m.api_home_team_id = th.api_id
     LEFT JOIN teams ta ON m.api_away_team_id = ta.api_id
     LEFT JOIN espn_matches e ON (
@@ -36,7 +38,9 @@ func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
     `
 
 	if roundStr != "" {
-		query += ` AND m.round IN (` + roundStr + `)`
+		// 🔥 AJUSTE AQUI: COALESCE garante que se a rodada for NULL (vazia no banco),
+		// ela vira 0 e é lida pelo "0" que enviamos no Handler.
+		query += ` AND COALESCE(m.round, 0) IN (` + roundStr + `)`
 	}
 
 	query += ` ORDER BY m.match_date ASC`
@@ -66,6 +70,8 @@ func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
 			&m.AwayScore,
 			&m.DateEvent,
 			&m.Status,
+			&m.Stage,
+			&m.GroupName,
 			&m.HomeLogo,
 			&m.AwayLogo,
 		)
