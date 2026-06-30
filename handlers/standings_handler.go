@@ -44,6 +44,7 @@ func canUpdateStandingsBackground(league string) bool {
 
 func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 	league := r.URL.Query().Get("league")
+	season := r.URL.Query().Get("season")
 	forceUpdate := r.URL.Query().Get("update") == "true"
 
 	if league == "" {
@@ -51,7 +52,12 @@ func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	season := getSeasonByLeague(league)
+	if season == "" {
+		season = database.GetLatestSeason(league)
+		if season == "" {
+			season = getSeasonByLeague(league)
+		}
+	}
 
 	// Se NÃO forçou a atualização, tenta buscar do banco
 	if !forceUpdate {
@@ -90,7 +96,7 @@ func processStandingsInBackground(league, season string) {
 }
 
 func forceCalculateAndSaveStandings(league, season string) {
-	matches, err := database.GetMatchesByLeague(league, "", "", false)
+	matches, err := database.GetMatchesByLeague(league, "", "", season, false)
 	if err != nil {
 		return
 	}

@@ -11,13 +11,8 @@ func CalculateStandings(matches []models.Match) map[int64]*models.Standing {
 
 	for _, m := range matches {
 
-		if m.Status != "FINISHED" && m.Status != "IN_PLAY" && m.Status != "PAUSED" {
-			continue
-		}
-
+		// 1. 🔥 SEMPRE REGISTRA OS TIMES NA TABELA (mesmo que o jogo seja no futuro)
 		home := table[m.APIHomeTeamID]
-		away := table[m.APIAwayTeamID]
-
 		if home == nil {
 			home = &models.Standing{
 				TeamID:   m.APIHomeTeamID,
@@ -25,6 +20,8 @@ func CalculateStandings(matches []models.Match) map[int64]*models.Standing {
 			}
 			table[m.APIHomeTeamID] = home
 		}
+
+		away := table[m.APIAwayTeamID]
 		if away == nil {
 			away = &models.Standing{
 				TeamID:   m.APIAwayTeamID,
@@ -33,6 +30,12 @@ func CalculateStandings(matches []models.Match) map[int64]*models.Standing {
 			table[m.APIAwayTeamID] = away
 		}
 
+		// 2. 🔥 SÓ SOMA PONTOS E GOLS SE O JOGO JÁ ROLOU (Ou está rolando)
+		if m.Status != "FINISHED" && m.Status != "IN_PLAY" && m.Status != "PAUSED" {
+			continue
+		}
+
+		// --- Daqui para baixo é igual ---
 		home.Played++
 		away.Played++
 

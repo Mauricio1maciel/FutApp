@@ -62,26 +62,28 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 	league := r.URL.Query().Get("league")
 	roundStr := r.URL.Query().Get("round")
 	dateStr := r.URL.Query().Get("date")
+	season := r.URL.Query().Get("season")
 	forceUpdate := r.URL.Query().Get("update") == "true"
 
 	if league == "" {
 		http.Error(w, "Informe a liga (ex: BSA, PL, PD)", http.StatusBadRequest)
 		return
 	}
+	if season == "" {
+		season = database.GetLatestSeason(league)
+	}
 
-	// isCurrentRound := false
-	// if roundStr == "" {
-	// 	currentRoundInt, _ := database.GetCurrentRound(league)
-	// 	roundStr = strconv.Itoa(currentRoundInt)
-	// 	isCurrentRound = true
-	// }
 	isCurrentRound := false
+
 	if roundStr == "" {
-		phase := database.GetCurrentPhase(league)
+		phase := database.GetCurrentPhase(league, season)
 
 		if phase == "CURRENT_ROUND" {
 			// Liga ainda está em fase de grupos (numérica)
-			currentRoundInt, _ := database.GetCurrentRound(league)
+			currentRoundInt, _ := database.GetCurrentRound(league, season)
+			if currentRoundInt > 38 {
+				currentRoundInt = 1
+			}
 			roundStr = strconv.Itoa(currentRoundInt)
 		} else {
 			// Liga entrou em mata-mata!
@@ -124,7 +126,7 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("⏱ Limite de requisições atingido")
 	}
 
-	matches, err := database.GetMatchesByLeague(league, roundStr, dateStr, isCurrentRound)
+	matches, err := database.GetMatchesByLeague(league, roundStr, dateStr, season, isCurrentRound)
 	if err != nil {
 		log.Printf("Erro ao buscar jogos no banco: %v", err)
 		http.Error(w, "Erro ao buscar jogos", http.StatusInternalServerError)

@@ -34,6 +34,8 @@ func main() {
 
 	http.HandleFunc("/teams", middlewares.JWTAuth(handlers.TeamsHandler))
 
+	http.HandleFunc("/seasons", middlewares.JWTAuth(handlers.SeasonsHandler))
+
 	http.HandleFunc("/matches", middlewares.JWTAuth(handlers.MatchesHandler))
 	http.HandleFunc("/team/matches", middlewares.JWTAuth(handlers.TeamMatchesHandler))
 

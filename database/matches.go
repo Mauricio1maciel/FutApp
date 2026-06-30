@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-func GetMatchesByLeague(league string, roundStr string, dateStr string, isCurrentRound bool) ([]models.Match, error) {
+func GetMatchesByLeague(league string, roundStr string, dateStr string, season string, isCurrentRound bool) ([]models.Match, error) {
 	query := `
     SELECT 
         COALESCE(e.espn_match_id::TEXT, 0::TEXT),  
@@ -39,7 +39,7 @@ func GetMatchesByLeague(league string, roundStr string, dateStr string, isCurren
         AND ta.espn_team_id = e.espn_away_team_id
         AND m.match_date::DATE = e.match_date::DATE
     )
-    WHERE m.league = $1 
+    WHERE m.league = $1 AND m.season = $2
     `
 	// 🔥 LÓGICA DE FILTRO ALTERADA
 	if dateStr != "" {
@@ -61,7 +61,7 @@ func GetMatchesByLeague(league string, roundStr string, dateStr string, isCurren
 
 	query += ` ORDER BY m.match_date ASC`
 
-	rows, err := DB.Query(query, league)
+	rows, err := DB.Query(query, league, season)
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Erro na query GetMatchesByLeague: %v", err)
 		return nil, err
@@ -162,27 +162,24 @@ func SaveMatch(
 	return err
 }
 
-func GetCurrentRound(league string) (int, error) {
+func GetCurrentRound(league string, season string) (int, error) {
 	var round int
 
 	query := `
         SELECT round FROM matches 
-        WHERE league = $1 AND match_date <= NOW() 
+        WHERE league = $1 AND AND season = $2 AND match_date <= NOW() 
         ORDER BY match_date DESC LIMIT 1
     `
-	err := DB.QueryRow(query, league).Scan(&round)
+	err := DB.QueryRow(query, league, season).Scan(&round)
 
 	if err != nil {
-		queryFallback := `SELECT MAX(round) FROM matches WHERE league = $1`
-		errFallback := DB.QueryRow(queryFallback, league).Scan(&round)
-		if errFallback != nil {
-			return 1, nil
-		}
+		return 1, nil
+
 	}
 
 	return round, nil
 }
-func GetCurrentPhase(league string) string {
+func GetCurrentPhase(league string, season string) string {
 	var stage string
 
 	// 1. Tenta buscar a fase mais recente que já aconteceu
@@ -202,4 +199,14 @@ func GetCurrentPhase(league string) string {
 	}
 
 	return stage
+}
+func GetLatestSeason(league string) string {
+	var season string
+	// Busca a season mais recente cadastrada para aquela liga
+	query := `SELECT season FROM matches WHERE league = $1 ORDER BY season DESC LIMIT 1`
+	err := DB.QueryRow(query, league).Scan(&season)
+	if err != nil {
+		return "2026" // Fallback
+	}
+	return season
 }
