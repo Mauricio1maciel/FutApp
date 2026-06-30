@@ -14,17 +14,25 @@ func SaveFullMatchHistoryold(match models.ESPNMatchDB, lineups []models.ESPNLine
 	}
 
 	_, err = tx.Exec(
-		`INSERT INTO espn_matches (espn_match_id, league, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status) 
-         VALUES ($1::BIGINT, $2, NULLIF($3, '')::TIMESTAMP, $4, $5::BIGINT, $6, $7::BIGINT, $8, $9, $10)
+		`INSERT INTO espn_matches 
+         (espn_match_id, league, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name) 
+         VALUES ($1::BIGINT, $2, NULLIF($3, '')::TIMESTAMP, $4, $5::BIGINT, $6, $7::BIGINT, $8, $9, $10, $11, $12)
          ON CONFLICT (espn_match_id) DO UPDATE 
          SET home_score = EXCLUDED.home_score,
              away_score = EXCLUDED.away_score,
              status = EXCLUDED.status,
-             league = EXCLUDED.league`,
+             league = EXCLUDED.league,
+             home_logo = EXCLUDED.home_logo,
+             away_logo = EXCLUDED.away_logo,
+             espn_home_team_id = EXCLUDED.espn_home_team_id,
+             espn_away_team_id = EXCLUDED.espn_away_team_id,
+             stage = EXCLUDED.stage,           -- ADICIONADO
+             group_name = EXCLUDED.group_name`, // ADICIONADO
 		match.MatchID, match.League, match.MatchDate,
 		match.HomeLogo, match.ESPNHomeTeamID,
 		match.AwayLogo, match.ESPNAwayTeamID,
 		match.HomeScore, match.AwayScore, match.Status,
+		match.Stage, match.GroupName, // PASSE OS VALORES AQUI
 	)
 	if err != nil {
 		tx.Rollback()
