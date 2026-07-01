@@ -7,10 +7,17 @@ import (
 
 func SearchTeamsGlobal(query string) ([]models.Team, error) {
 	rows, err := DB.Query(
-		`SELECT id, api_id, name, tl.league, stadium, crest_url 
+		`SELECT 
+            t.id, 
+            t.api_id, 
+            t.name, 
+            MAX(tl.league) AS league, 
+            t.stadium, 
+            t.crest_url 
          FROM teams t
-		 JOIN team_leagues tl ON t.api_id  = tl.team_api_id
-         WHERE unaccent(name) ILIKE unaccent('%' || $1 || '%') 
+         JOIN team_leagues tl ON t.api_id = tl.team_api_id
+         WHERE unaccent(t.name) ILIKE unaccent('%' || $1 || '%') 
+         GROUP BY t.id, t.api_id, t.name, t.stadium, t.crest_url -- 🔥 Agrupa o time num só
          LIMIT 5`,
 		query,
 	)
