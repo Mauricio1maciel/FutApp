@@ -23,9 +23,27 @@ type FDMatch struct {
 	} `json:"awayTeam"`
 
 	Score struct {
+		Winner   string `json:"winner"`
+		Duration string `json:"duration"` // ADICIONADO: Diz se foi para pênaltis (PENALTY_SHOOTOUT)
+
 		FullTime struct {
 			Home *int `json:"home"`
 			Away *int `json:"away"`
 		} `json:"fullTime"`
+
+		RegularTime struct {
+			Home *int `json:"home"`
+			Away *int `json:"away"`
+		} `json:"regularTime"`
+
+		ExtraTime struct {
+			Home *int `json:"home"`
+			Away *int `json:"away"`
+		} `json:"extraTime"`
+
+		Penalties struct {
+			Home *int `json:"home"`
+			Away *int `json:"away"`
+		} `json:"penalties"`
 	} `json:"score"`
 }

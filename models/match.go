@@ -16,10 +16,13 @@ type Match struct {
 	AwayTeam       string `json:"away_team"`
 	ESPNAwayTeamID string `json:"espn_away_team_id"`
 
-	HomeScore int    `json:"home_score"`
-	AwayScore int    `json:"away_score"`
-	DateEvent string `json:"date_event"`
-	Status    string `json:"status"`
+	HomeScore   int    `json:"home_score"`
+	AwayScore   int    `json:"away_score"`
+	HomePenalty *int   `json:"home_penalty,omitempty"` // ADICIONADO
+	AwayPenalty *int   `json:"away_penalty,omitempty"`
+	DateEvent   string `json:"date_event"`
+	Status      string `json:"status"`
+	Winner      string `json:"winner"`
 
 	Stage     string `json:"stage"`
 	GroupName string `json:"group_name"`

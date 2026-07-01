@@ -104,6 +104,7 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 
 			for _, m := range apiMatches {
 				homeScore, awayScore := 0, 0
+				var homePen, awayPen *int
 				if m.Score.FullTime.Home != nil {
 					homeScore = *m.Score.FullTime.Home
 				}
@@ -111,13 +112,29 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 					awayScore = *m.Score.FullTime.Away
 				}
 
+				// 2. 🔥 À PROVA DE BALAS: Se tem pênalti, subtrai OBRIGATORIAMENTE do placar!
+				if m.Score.Penalties.Home != nil && m.Score.Penalties.Away != nil {
+					hP := *m.Score.Penalties.Home
+					aP := *m.Score.Penalties.Away
+
+					homePen = &hP
+					awayPen = &aP
+
+					// Tira os pênaltis do placar final para termos o empate do tempo normal!
+					homeScore = homeScore - hP
+					awayScore = awayScore - aP
+				}
+
 				database.SaveMatch(
 					int64(m.ID), lg,
 					getSeasonFromDate(m.UTCDate, lg),
 					m.Matchday,
 					int64(m.HomeTeam.ID), int64(m.AwayTeam.ID),
-					homeScore, awayScore, m.UTCDate, m.Status,
+					homeScore, awayScore,
+					homePen, awayPen,
+					m.UTCDate, m.Status,
 					m.Stage, m.Group,
+					m.Score.Winner,
 				)
 			}
 			utils.CustomLog("API", "Atualização em segundo plano concluída para: %s", lg)

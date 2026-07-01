@@ -24,17 +24,20 @@ func GetMatchesByLeague(league string, roundStr string, dateStr string, season s
         COALESCE(ta.espn_team_id, 0),
         COALESCE(m.home_score, 0),
         COALESCE(m.away_score, 0),
+        m.home_penalty,              
+        m.away_penalty,             
         COALESCE(m.match_date::TEXT, ''), 
         COALESCE(m.status, ''),
-        COALESCE(m.stage, ''),       -- ADICIONADO: Fase da competição
-        COALESCE(m.group_name, ''),  -- ADICIONADO: Nome do grupo
+        COALESCE(m.stage, ''),       
+        COALESCE(m.group_name, ''),
+		COALESCE(m.winner, ''),  
         COALESCE(th.crest_url, '') AS home_logo,
         COALESCE(ta.crest_url, '') AS away_logo
     FROM matches m
     LEFT JOIN teams th ON m.api_home_team_id = th.api_id
     LEFT JOIN teams ta ON m.api_away_team_id = ta.api_id
     LEFT JOIN leagues l ON m.league = l.code_api
-	 LEFT JOIN espn_matches e ON (
+     LEFT JOIN espn_matches e ON (
         th.espn_team_id = e.espn_home_team_id 
         AND ta.espn_team_id = e.espn_away_team_id
         AND m.match_date::DATE = e.match_date::DATE
@@ -86,10 +89,13 @@ func GetMatchesByLeague(league string, roundStr string, dateStr string, season s
 			&m.ESPNAwayTeamID,
 			&m.HomeScore,
 			&m.AwayScore,
+			&m.HomePenalty,
+			&m.AwayPenalty,
 			&m.DateEvent,
 			&m.Status,
 			&m.Stage,
 			&m.GroupName,
+			&m.Winner,
 			&m.HomeLogo,
 			&m.AwayLogo,
 		)
@@ -115,28 +121,33 @@ func SaveMatch(
 	apiAwayTeamID int64,
 	homeScore int,
 	awayScore int,
+	homePenalty *int,
+	awayPenalty *int,
 	date string,
 	status string,
 	stage string,
 	groupName string,
+	winner string,
 ) error {
 
 	query := `
     INSERT INTO matches
-    (id_event, league, season, round, api_home_team_id, api_away_team_id, home_score, away_score, match_date, status, stage, group_name)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULLIF($9, '')::TIMESTAMP,$10,$11,$12)
+    (id_event, league, season, round, api_home_team_id, api_away_team_id, home_score, away_score, home_penalty, away_penalty, match_date, status, stage, group_name, winner)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11, '')::TIMESTAMP,$12,$13,$14,$15)
     ON CONFLICT (id_event, league) 
     DO UPDATE SET
          home_score = EXCLUDED.home_score,
          away_score = EXCLUDED.away_score,
+         home_penalty = EXCLUDED.home_penalty, 
+         away_penalty = EXCLUDED.away_penalty,
          match_date = EXCLUDED.match_date,
          status = EXCLUDED.status,
-         -- Só atualiza os IDs, rodada, fase e grupo se precisarem de correção na API
          round = EXCLUDED.round,
          api_home_team_id = EXCLUDED.api_home_team_id,
          api_away_team_id = EXCLUDED.api_away_team_id,
-         stage = EXCLUDED.stage,             -- ADICIONADO
-         group_name = EXCLUDED.group_name    -- ADICIONADO
+         stage = EXCLUDED.stage,
+         group_name = EXCLUDED.group_name,
+		 winner = EXCLUDED.winner
     `
 
 	_, err := DB.Exec(
@@ -149,10 +160,13 @@ func SaveMatch(
 		apiAwayTeamID,
 		homeScore,
 		awayScore,
+		homePenalty,
+		awayPenalty,
 		date,
 		status,
-		stage,     // ADICIONADO
-		groupName, // ADICIONADO
+		stage,
+		groupName,
+		winner,
 	)
 
 	if err != nil {
