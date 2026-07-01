@@ -20,6 +20,8 @@ func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
         COALESCE(ta.espn_team_id, 0),   
         COALESCE(m.home_score, 0),
         COALESCE(m.away_score, 0),
+		m.home_penalty,              
+        m.away_penalty,
         COALESCE(m.match_date::TEXT, ''), 
         COALESCE(m.status, ''),
 		COALESCE(m.stage, ''),       -- ADICIONADO: Fase da competição
@@ -68,6 +70,8 @@ func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
 			&m.ESPNAwayTeamID,
 			&m.HomeScore,
 			&m.AwayScore,
+			&m.HomePenalty,
+			&m.AwayPenalty,
 			&m.DateEvent,
 			&m.Status,
 			&m.Stage,
