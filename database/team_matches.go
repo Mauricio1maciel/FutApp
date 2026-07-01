@@ -24,8 +24,9 @@ func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
         m.away_penalty,
         COALESCE(m.match_date::TEXT, ''), 
         COALESCE(m.status, ''),
-		COALESCE(m.stage, ''),       -- ADICIONADO: Fase da competição
+		COALESCE(m.stage, ''),       
         COALESCE(m.group_name, ''),
+		COALESCE(m.winner, ''),
         COALESCE(th.crest_url, '') AS home_logo,
         COALESCE(ta.crest_url, '') AS away_logo
     FROM matches m 
@@ -76,6 +77,7 @@ func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
 			&m.Status,
 			&m.Stage,
 			&m.GroupName,
+			&m.Winner,
 			&m.HomeLogo,
 			&m.AwayLogo,
 		)
