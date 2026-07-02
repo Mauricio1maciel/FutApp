@@ -45,6 +45,8 @@ func main() {
 
 	http.HandleFunc("/players", middlewares.JWTAuth(handlers.PlayersHandler))
 
+	http.HandleFunc("/league/stats", middlewares.JWTAuth(handlers.LeagueStatsHandler))
+
 	http.HandleFunc("/team/players", middlewares.JWTAuth(handlers.TeamPlayersHandler))
 
 	http.HandleFunc("/matches/live", middlewares.JWTAuth(handlers.LiveMatchesHandler))
