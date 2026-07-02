@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-// 🔥 NOVA FUNÇÃO (A que faltava!): Garante que o jogador fantasma seja criado na base
 func UpsertESPNPlayerGeneric(playerID int64, name string, headshot string, teamID int64) error {
 	query := `
     INSERT INTO espn_players (espn_id, name, headshot_url, espn_team_id)
@@ -13,8 +12,8 @@ func UpsertESPNPlayerGeneric(playerID int64, name string, headshot string, teamI
     ON CONFLICT (espn_id) 
     DO UPDATE SET
         name = EXCLUDED.name,
-        headshot_url = EXCLUDED.headshot_url,
-        espn_team_id = EXCLUDED.espn_team_id
+        headshot_url = EXCLUDED.headshot_url
+        -- Removi espn_team_id daqui! Ele só é inserido na criação.
     `
 	_, err := DB.Exec(query, playerID, name, headshot, teamID)
 	return err
@@ -52,7 +51,7 @@ func GetTopStats(league string, season string, statType string) ([]models.Player
 
 	query := fmt.Sprintf(`
         SELECT 
-            ps.espn_player_id::TEXT, 
+            ps.espn_player_id,
             COALESCE(ep.name, 'Jogador ' || ps.espn_player_id::TEXT), 
             COALESCE(t.name, 'Time ' || ps.espn_team_id::TEXT), 
             COALESCE(t.crest_url, ''), 
