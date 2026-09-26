@@ -6,7 +6,9 @@ import (
 	"App-Futebol/handlers"
 	"App-Futebol/middlewares"
 	"App-Futebol/services"
-
+	"App-Futebol/utils"
+	"App-Futebol/worker"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -23,6 +25,19 @@ func main() {
 	}
 
 	database.Connect()
+	// 2. Cria a "Chave" de inicialização
+	isWorker := flag.Bool("worker", false, "Rodar em modo Worker (Orange Pi)")
+	flag.Parse()
+
+	// 3. Se for o Orange Pi, roda o Worker e ignora a API!
+	if *isWorker {
+		utils.CustomLog("SISTEMA", "Iniciando em MODO WORKER no Orange Pi...")
+		worker.StartEngine()
+		return // Segura o processo aqui para sempre
+	}
+
+	// 4. Se não tiver a flag (Render), sobe a API Web normalmente
+	utils.CustomLog("SISTEMA", "Iniciando em MODO API WEB...")
 
 	services.StartBackgroundUpdater()
 	servico.StartBackgroundScheduler()
