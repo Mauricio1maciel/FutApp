@@ -40,6 +40,10 @@ type AppMatchSummary struct {
 
 type ESPNSummaryResponse struct {
 	Header struct {
+		Season struct {
+			Year int    `json:"year"`
+			Name string `json:"name"` // Ex: "2026-27 UEFA Nations League..."
+		} `json:"season"`
 		Competitions []struct {
 			Date   string `json:"date"`
 			Status struct {

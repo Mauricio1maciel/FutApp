@@ -9,6 +9,7 @@ type FullMatchHistory struct {
 type ESPNMatchDB struct {
 	MatchID   string `json:"espn_match_id"`
 	League    string `json:"league"`
+	Season    string `json:"season"`
 	MatchDate string `json:"match_date"`
 	HomeLogo  string `json:"home_logo"`
 	AwayLogo  string `json:"away_logo"`

@@ -7,9 +7,10 @@ import (
 
 var ActiveLogs = map[string]bool{
 	"WORKER":                 false,
-	"DATABASE":               false,
+	"DATABASE":               true,
+	"DATABASE_ERRO":          true,
 	"API":                    false,
-	"ESPN":                   false,
+	"ESPN":                   true,
 	"IMAGE_SEARCH":           false,
 	"BOT":                    false,
 	"AUTH":                   false,

@@ -19,7 +19,7 @@ func GetTodayMatches() ([]models.WorkerMatch, error) {
 		FROM matches m
 		INNER JOIN teams th ON m.api_home_team_id = th.api_id
 		INNER JOIN teams ta ON m.api_away_team_id = ta.api_id
-		INNER JOIN espn_matches e ON (
+		LEFT JOIN espn_matches e ON (
 			th.espn_team_id = e.espn_home_team_id 
 			AND ta.espn_team_id = e.espn_away_team_id
 			AND m.match_date::DATE = e.match_date::DATE
