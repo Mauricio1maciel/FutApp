@@ -2,52 +2,57 @@ package services
 
 import (
 	"App-Futebol/database"
-	"App-Futebol/models"
 	"App-Futebol/utils"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 )
 
 func SyncESPNScoreboardForLeague(leagueCode string) {
-	espnLeague := getESPNLeague(leagueCode) // Use a sua função que converte 'BSA' para 'bra.1'
-	if espnLeague == "" {
-		return
-	}
+	// Usa a função getESPNLeague que já existe no espn_service.go!
+	espnLeague := getESPNLeague(leagueCode)
 
-	// Puxa o Scoreboard para a data de hoje (YYYYMMDD) para ser preciso
-	today := time.Now().Format("20060102")
-	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard?dates=%s", espnLeague, today)
+	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard", espnLeague)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := http.Get(url)
 	if err != nil {
+		utils.CustomLog("WORKER_ESPN", "Erro buscar scoreboard da liga %s: %v", leagueCode, err)
 		return
 	}
 	defer resp.Body.Close()
 
-	var scoreboard models.ESPNScoreboardResponse
-	if err := json.NewDecoder(resp.Body).Decode(&scoreboard); err != nil {
+	var data struct {
+		Events []struct {
+			ID           string `json:"id"`
+			Competitions []struct {
+				Status struct {
+					Type struct {
+						State string `json:"state"`
+					} `json:"type"`
+				} `json:"status"`
+			} `json:"competitions"`
+		} `json:"events"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		utils.CustomLog("WORKER_ESPN", "Erro no JSON do scoreboard da liga %s: %v", leagueCode, err)
 		return
 	}
 
-	for _, event := range scoreboard.Events {
+	for _, event := range data.Events {
 		if len(event.Competitions) > 0 {
-			var homeID, awayID string
-			for _, comp := range event.Competitions[0].Competitors {
-				if comp.HomeAway == "home" {
-					homeID = comp.Team.ID
-				} else if comp.HomeAway == "away" {
-					awayID = comp.Team.ID
-				}
-			}
+			matchID := event.ID
+			status := event.Competitions[0].Status.Type.State
 
-			// 🔥 Salva a ponte de ligação!
-			if homeID != "" && awayID != "" {
-				database.SaveESPNMatchMapping(event.ID, homeID, awayID, event.Date)
+			if status == "pre" || status == "in" || status == "post" {
+				utils.CustomLog("WORKER_ESPN", "Registo Proativo: Puxando resumo do jogo %s (%s)", matchID, leagueCode)
+
+				// Continua a passar o código curto (ex: UNL) para gravar no banco
+				m, lineups, matchEvents, err := FetchAndParseESPNMatch(matchID, leagueCode)
+				if err == nil {
+					database.SaveFullMatchHistory(m, lineups, matchEvents)
+				}
 			}
 		}
 	}
-	utils.CustomLog("SCOREBOARD", "Mapeamento atualizado para a liga %s", leagueCode)
 }

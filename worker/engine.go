@@ -91,6 +91,7 @@
 //			fmt.Printf("[WORKER_ERRO] ❌ Falha na sincronização ESPN (Jogo %s): %v\n", matchID, err)
 //		}
 //	}
+
 package worker
 
 import (
