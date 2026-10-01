@@ -2,6 +2,7 @@ package database
 
 import (
 	"App-Futebol/models"
+	"App-Futebol/utils"
 )
 
 func ClearStandings(league string, season string) error {
@@ -15,9 +16,7 @@ func ClearStandings(league string, season string) error {
 }
 
 func SaveStandings(league string, season string, standings []models.Standing) error {
-
 	for _, s := range standings {
-
 		// ADICIONADO: group_name no INSERT e o parâmetro $14
 		_, err := DB.Exec(`
             INSERT INTO standings
@@ -41,6 +40,8 @@ func SaveStandings(league string, season string, standings []models.Standing) er
 		)
 
 		if err != nil {
+			// 🔥 AGORA ELE VAI GRITAR NO TERMINAL SE DER ERRO!
+			utils.CustomLog("DATABASE_ERRO", "Falha ao salvar time ID %d na tabela standings: %v", s.TeamID, err)
 			return err
 		}
 	}
@@ -50,10 +51,11 @@ func SaveStandings(league string, season string, standings []models.Standing) er
 
 func GetStandingsByLeague(league string, season string) ([]models.Standing, error) {
 
-	// ADICIONADO: COALESCE(s.group_name, '') e a ordenação dupla no ORDER BY
+	// 🔥 ADICIONADO: s.team_id no SELECT
 	rows, err := DB.Query(`
     SELECT 
         s.position,
+        s.team_id, 
         COALESCE(t.name, ''),
         s.played,
         s.wins,
@@ -76,17 +78,17 @@ func GetStandingsByLeague(league string, season string) ([]models.Standing, erro
 	if err != nil {
 		return nil, err
 	}
-
 	defer rows.Close()
 
 	var standings []models.Standing
 
 	for rows.Next() {
-
 		var s models.Standing
 
+		// 🔥 ADICIONADO: &s.TeamID no SCAN
 		err := rows.Scan(
 			&s.Position,
+			&s.TeamID,
 			&s.TeamName,
 			&s.Played,
 			&s.Wins,
@@ -105,14 +107,12 @@ func GetStandingsByLeague(league string, season string) ([]models.Standing, erro
 		if err != nil {
 			return nil, err
 		}
-
 		standings = append(standings, s)
 	}
 
 	if standings == nil {
 		standings = []models.Standing{}
 	}
-
 	return standings, nil
 }
 

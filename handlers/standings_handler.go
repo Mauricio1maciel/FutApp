@@ -111,6 +111,8 @@ func forceCalculateAndSaveStandings(league, season string) {
 	// 🔥 O DESVIO INTELIGENTE
 	if league == "WC" {
 		standings = services.BuildCupStandings(matches, criteria)
+	} else if league == "UNL" {
+		standings = services.BuildUNLStandings(matches, criteria)
 	} else {
 		standings = services.BuildStandings(matches, winners, rule, zones, criteria)
 	}

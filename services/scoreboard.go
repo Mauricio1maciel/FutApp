@@ -9,9 +9,7 @@ import (
 )
 
 func SyncESPNScoreboardForLeague(leagueCode string) {
-	// Usa a função getESPNLeague que já existe no espn_service.go!
 	espnLeague := getESPNLeague(leagueCode)
-
 	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard", espnLeague)
 
 	resp, err := http.Get(url)
@@ -21,10 +19,17 @@ func SyncESPNScoreboardForLeague(leagueCode string) {
 	}
 	defer resp.Body.Close()
 
+	// 🔥 1. A ESTRUTURA AGORA PESCA O GRUPO E A FASE DIRETAMENTE DO SCOREBOARD
 	var data struct {
 		Events []struct {
-			ID           string `json:"id"`
+			ID     string `json:"id"`
+			Season struct {
+				Slug string `json:"slug"`
+			} `json:"season"`
 			Competitions []struct {
+				Group struct {
+					Name string `json:"name"`
+				} `json:"group"`
 				Status struct {
 					Type struct {
 						State string `json:"state"`
@@ -47,9 +52,19 @@ func SyncESPNScoreboardForLeague(leagueCode string) {
 			if status == "pre" || status == "in" || status == "post" {
 				utils.CustomLog("WORKER_ESPN", "Registo Proativo: Puxando resumo do jogo %s (%s)", matchID, leagueCode)
 
-				// Continua a passar o código curto (ex: UNL) para gravar no banco
+				// Busca os detalhes no /summary (que vêm sem o grupo)
 				m, lineups, matchEvents, err := FetchAndParseESPNMatch(matchID, leagueCode)
+
 				if err == nil {
+					// 🔥 2. A MÁGICA: Injetamos o Grupo e a Fase que vieram do /scoreboard na nossa variável!
+					if event.Season.Slug != "" {
+						m.Stage = event.Season.Slug
+					}
+					if event.Competitions[0].Group.Name != "" {
+						m.GroupName = event.Competitions[0].Group.Name
+					}
+
+					// Agora sim, vai para o banco de dados com a informação completa!
 					database.SaveFullMatchHistory(m, lineups, matchEvents)
 				}
 			}

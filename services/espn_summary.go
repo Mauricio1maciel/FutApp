@@ -31,21 +31,19 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		return models.ESPNMatchDB{}, nil, nil, fmt.Errorf("erro unmarshal: %v", err)
 	}
 
-	// 🔥 EXTRAÇÃO INTELIGENTE DA TEMPORADA DIRETAMENTE DO SEU MODELO
-	seasonStr := strconv.Itoa(data.Header.Season.Year) // Padrão seguro (ex: "2026")
+	// EXTRAÇÃO INTELIGENTE DA TEMPORADA DIRETAMENTE DO SEU MODELO
+	seasonStr := strconv.Itoa(data.Header.Season.Year)
 
-	// Procura o padrão "4 dígitos - 2 dígitos" (Ex: "2026-27 UEFA Nations...")
 	re := regexp.MustCompile(`(\d{4})-(\d{2})`)
 	matchesSeason := re.FindStringSubmatch(data.Header.Season.Name)
 	if len(matchesSeason) == 3 {
-		// Transforma "2026-27" em "2026-2027"
 		seasonStr = fmt.Sprintf("%s-20%s", matchesSeason[1], matchesSeason[2])
 	}
 
 	match := models.ESPNMatchDB{
 		MatchID: matchID,
 		League:  leagueCode,
-		Season:  seasonStr, // 🔥 A TEMPORADA VEM PARA AQUI!
+		Season:  seasonStr,
 	}
 
 	if len(data.Header.Competitions) > 0 {
@@ -53,9 +51,8 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		match.MatchDate = comp.Date
 		match.Status = comp.Status.Type.State
 
-		// 🔥 A MÁGICA ENTRA AQUI: Capturamos a Fase e o Grupo!
+		// Tenta pegar do Summary (mesmo sabendo que a ESPN costuma esconder aqui)
 		match.Stage = data.Header.Season.Slug
-		match.GroupName = comp.Group.Name
 
 		for _, team := range comp.Competitors {
 			teamID, _ := strconv.ParseInt(team.Team.ID, 10, 64)
@@ -68,13 +65,54 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 			if team.HomeAway == "home" {
 				match.ESPNHomeTeamID = teamID
 				match.HomeScore = team.Score
-				match.HomeTeam = teamName // Guarda em memória
-				match.HomeLogo = teamLogo // Guarda em memória
+				match.HomeTeam = teamName
+				match.HomeLogo = teamLogo
 			} else {
 				match.ESPNAwayTeamID = teamID
 				match.AwayScore = team.Score
-				match.AwayTeam = teamName // Guarda em memória
-				match.AwayLogo = teamLogo // Guarda em memória
+				match.AwayTeam = teamName
+				match.AwayLogo = teamLogo
+			}
+		}
+	}
+
+	// 🔥 O TRUQUE DE MESTRE PARA A ROTA MANUAL (BACKFILL)
+	// Se o grupo estiver vazio e a data for válida (ex: "2026-09-28T..."), vamos buscar ao Scoreboard daquele dia!
+	if match.GroupName == "" && len(match.MatchDate) >= 10 {
+		// Transforma "2026-09-28..." em "20260928"
+		dateParam := match.MatchDate[0:4] + match.MatchDate[5:7] + match.MatchDate[8:10]
+		scoreUrl := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard?dates=%s", espnLeague, dateParam)
+
+		respScore, errScore := http.Get(scoreUrl)
+		if errScore == nil {
+			defer respScore.Body.Close()
+			var scoreData struct {
+				Events []struct {
+					ID     string `json:"id"`
+					Season struct {
+						Slug string `json:"slug"`
+					} `json:"season"`
+					Competitions []struct {
+						Group struct {
+							Name string `json:"name"`
+						} `json:"group"`
+					} `json:"competitions"`
+				} `json:"events"`
+			}
+			if json.NewDecoder(respScore.Body).Decode(&scoreData) == nil {
+				// Procura o nosso jogo no meio dos jogos desse dia
+				for _, evt := range scoreData.Events {
+					if evt.ID == matchID {
+						if evt.Season.Slug != "" {
+							match.Stage = evt.Season.Slug
+						}
+						if len(evt.Competitions) > 0 && evt.Competitions[0].Group.Name != "" {
+							match.GroupName = evt.Competitions[0].Group.Name
+						}
+						utils.CustomLog("ESPN_API", "Grupo e Fase resgatados manualmente: %s - %s", match.GroupName, match.Stage)
+						break
+					}
+				}
 			}
 		}
 	}
@@ -84,7 +122,6 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		teamID, _ := strconv.ParseInt(roster.Team.ID, 10, 64)
 
 		for _, athlete := range roster.Roster {
-
 			playerID, _ := strconv.ParseInt(athlete.Athlete.ID, 10, 64)
 
 			lineups = append(lineups, models.ESPNLineupDB{

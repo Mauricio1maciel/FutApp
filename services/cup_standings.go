@@ -4,6 +4,7 @@ import (
 	"App-Futebol/models"
 	"App-Futebol/utils" // Adicione o import do utils
 	"sort"
+	"strings"
 )
 
 func BuildCupStandings(matches []models.Match, criteria []string) []models.Standing {
@@ -84,5 +85,93 @@ func BuildCupStandings(matches []models.Match, criteria []string) []models.Stand
 	}
 
 	utils.CustomLog("COPA", "🏆 Tabela da Fase de Grupos gerada com sucesso! Total de times: %d", len(finalStandings))
+	return finalStandings
+}
+func BuildUNLStandings(matches []models.Match, criteria []string) []models.Standing {
+	utils.CustomLog("UNL", "🔥 Iniciando cálculo da Nations League! Total de jogos recebidos: %d", len(matches))
+
+	groupMatches := make(map[string][]models.Match)
+	for _, m := range matches {
+		// 🔥 REMOVEMOS A DEPENDÊNCIA DO "league-phase".
+		// Agora, se tiver "Group" no nome e a liga for UNL, ele puxa!
+		if m.GroupName != "" && strings.HasPrefix(m.GroupName, "Group") {
+			groupMatches[m.GroupName] = append(groupMatches[m.GroupName], m)
+		}
+	}
+
+	var groupNames []string
+	for gName := range groupMatches {
+		groupNames = append(groupNames, gName)
+	}
+	sort.Strings(groupNames) // Ordena os grupos (Group A1, Group A2, Group B1, etc...)
+
+	utils.CustomLog("UNL", "✅ Grupos identificados para cálculo: %v", groupNames)
+
+	var finalStandings []models.Standing
+
+	for _, gName := range groupNames {
+		gMatches := groupMatches[gName]
+		tableMap := CalculateStandings(gMatches) // Sua função de somar vitórias/derrotas
+		s := MapToSlice(tableMap)
+
+		// Ordena os times do grupo
+		sort.SliceStable(s, func(i, j int) bool {
+			return compareTeams(s[i], s[j], gMatches, criteria)
+		})
+
+		// 🔥 INTELIGÊNCIA DA NATIONS LEAGUE: Descobrir em que Liga estamos (A, B, C ou D)
+		// Se o nome for "Group C2", a letra da liga é 'C'
+		leagueLetter := ""
+		if strings.HasPrefix(gName, "Group ") && len(gName) >= 7 {
+			leagueLetter = string(gName[6]) // Pega a primeira letra depois do espaço
+		}
+
+		for i := range s {
+			s[i].Position = i + 1
+			s[i].GroupName = gName
+
+			// Define as zonas baseado na Liga e Posição (Regras oficiais de 2026/27)
+			switch leagueLetter {
+			case "A":
+				if s[i].Position <= 2 {
+					s[i].Zone = "Classificado - Quartas de final"
+				} else if s[i].Position == 3 {
+					s[i].Zone = "Play-off de Rebaixamento"
+				} else {
+					s[i].Zone = "Rebaixado - Liga B"
+				}
+			case "B":
+				if s[i].Position == 1 {
+					s[i].Zone = "Promovido - Liga A"
+				} else if s[i].Position == 2 {
+					s[i].Zone = "Play-off de Promoção"
+				} else if s[i].Position == 3 {
+					s[i].Zone = "Play-off de Rebaixamento"
+				} else {
+					s[i].Zone = "Rebaixado - Liga C"
+				}
+			case "C":
+				if s[i].Position == 1 {
+					s[i].Zone = "Promovido - Liga B"
+				} else if s[i].Position == 2 {
+					s[i].Zone = "Play-off de Promoção"
+				} else if s[i].Position == 3 {
+					s[i].Zone = "Play-off de Rebaixamento"
+				} else {
+					s[i].Zone = "Rebaixado - Liga D"
+				}
+			case "D":
+				if s[i].Position == 1 {
+					s[i].Zone = "Promovido - Liga C"
+				} else if s[i].Position == 2 {
+					s[i].Zone = "Play-off de Promoção"
+				}
+			}
+
+			finalStandings = append(finalStandings, s[i])
+		}
+	}
+
+	utils.CustomLog("UNL", "🏆 Tabela da Nations League gerada com sucesso! Total de times: %d", len(finalStandings))
 	return finalStandings
 }
