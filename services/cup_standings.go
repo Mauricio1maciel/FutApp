@@ -2,7 +2,7 @@ package services
 
 import (
 	"App-Futebol/models"
-	"App-Futebol/utils" // Adicione o import do utils
+	"App-Futebol/utils"
 	"sort"
 	"strings"
 )
@@ -39,7 +39,7 @@ func BuildCupStandings(matches []models.Match, criteria []string) []models.Stand
 
 		for i := range s {
 			s[i].Position = i + 1
-			s[i].GroupName = gName // Gravando o grupo!
+			s[i].GroupName = gName
 
 			if s[i].Position == 3 {
 				thirdPlacedTeams = append(thirdPlacedTeams, s[i])
@@ -92,8 +92,6 @@ func BuildUNLStandings(matches []models.Match, criteria []string) []models.Stand
 
 	groupMatches := make(map[string][]models.Match)
 	for _, m := range matches {
-		// 🔥 REMOVEMOS A DEPENDÊNCIA DO "league-phase".
-		// Agora, se tiver "Group" no nome e a liga for UNL, ele puxa!
 		if m.GroupName != "" && strings.HasPrefix(m.GroupName, "Group") {
 			groupMatches[m.GroupName] = append(groupMatches[m.GroupName], m)
 		}
@@ -103,7 +101,7 @@ func BuildUNLStandings(matches []models.Match, criteria []string) []models.Stand
 	for gName := range groupMatches {
 		groupNames = append(groupNames, gName)
 	}
-	sort.Strings(groupNames) // Ordena os grupos (Group A1, Group A2, Group B1, etc...)
+	sort.Strings(groupNames)
 
 	utils.CustomLog("UNL", "✅ Grupos identificados para cálculo: %v", groupNames)
 
@@ -111,7 +109,7 @@ func BuildUNLStandings(matches []models.Match, criteria []string) []models.Stand
 
 	for _, gName := range groupNames {
 		gMatches := groupMatches[gName]
-		tableMap := CalculateStandings(gMatches) // Sua função de somar vitórias/derrotas
+		tableMap := CalculateStandings(gMatches)
 		s := MapToSlice(tableMap)
 
 		// Ordena os times do grupo
@@ -119,18 +117,15 @@ func BuildUNLStandings(matches []models.Match, criteria []string) []models.Stand
 			return compareTeams(s[i], s[j], gMatches, criteria)
 		})
 
-		// 🔥 INTELIGÊNCIA DA NATIONS LEAGUE: Descobrir em que Liga estamos (A, B, C ou D)
-		// Se o nome for "Group C2", a letra da liga é 'C'
 		leagueLetter := ""
 		if strings.HasPrefix(gName, "Group ") && len(gName) >= 7 {
-			leagueLetter = string(gName[6]) // Pega a primeira letra depois do espaço
+			leagueLetter = string(gName[6])
 		}
 
 		for i := range s {
 			s[i].Position = i + 1
 			s[i].GroupName = gName
 
-			// Define as zonas baseado na Liga e Posição (Regras oficiais de 2026/27)
 			switch leagueLetter {
 			case "A":
 				if s[i].Position <= 2 {

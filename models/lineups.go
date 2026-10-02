@@ -43,12 +43,12 @@ type ESPNSummaryResponse struct {
 		Season struct {
 			Year int    `json:"year"`
 			Name string `json:"name"`
-			Slug string `json:"slug"` // 🔥 ADICIONADO: Puxa a fase (ex: "league-phase")
+			Slug string `json:"slug"`
 		} `json:"season"`
 		Competitions []struct {
 			Date  string `json:"date"`
 			Group struct {
-				Name string `json:"name"` // 🔥 ADICIONADO: Puxa o grupo (ex: "Group C1")
+				Name string `json:"name"`
 			} `json:"group"`
 			Status struct {
 				Type struct {

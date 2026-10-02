@@ -11,19 +11,23 @@ import (
 func LeagueStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	league := r.URL.Query().Get("league")
-	season := "2026" // Use a função database.GetLatestSeason(league) se já a tiver
+	season := r.URL.Query().Get("season")
 
 	if league == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Liga não informada"})
 		return
 	}
+	if season == "" {
+		season = database.GetLatestSeason(league)
+		if season == "" {
+			season = getSeasonByLeague(league)
+		}
+	}
 
-	// 1. Pega do Banco de Dados (Velocidade Relâmpago!)
 	scorers, _ := database.GetTopStats(league, season, "goals")
 	assists, _ := database.GetTopStats(league, season, "assists")
 
-	// Previne nil slices
 	if scorers == nil {
 		scorers = []models.PlayerStat{}
 	}
@@ -36,9 +40,7 @@ func LeagueStatsHandler(w http.ResponseWriter, r *http.Request) {
 		TopAssists: assists,
 	}
 
-	// 2. Devolve para o App IMEDIATAMENTE
 	json.NewEncoder(w).Encode(response)
 
-	// 3. Vai buscar dados atualizados nas costas do utilizador
 	go services.SyncLeagueStatsBackground(league, season)
 }

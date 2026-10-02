@@ -79,14 +79,12 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		phase := database.GetCurrentPhase(league, season)
 
 		if phase == "CURRENT_ROUND" {
-			// Liga ainda está em fase de grupos (numérica)
 			currentRoundInt, _ := database.GetCurrentRound(league, season)
 			if currentRoundInt > 38 {
 				currentRoundInt = 1
 			}
 			roundStr = strconv.Itoa(currentRoundInt)
 		} else {
-			// Liga entrou em mata-mata!
 			roundStr = phase
 		}
 		isCurrentRound = true
@@ -112,7 +110,6 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 					awayScore = *m.Score.FullTime.Away
 				}
 
-				// 2. 🔥 À PROVA DE BALAS: Se tem pênalti, subtrai OBRIGATORIAMENTE do placar!
 				if m.Score.Penalties.Home != nil && m.Score.Penalties.Away != nil {
 					hP := *m.Score.Penalties.Home
 					aP := *m.Score.Penalties.Away
@@ -120,7 +117,6 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 					homePen = &hP
 					awayPen = &aP
 
-					// Tira os pênaltis do placar final para termos o empate do tempo normal!
 					homeScore = homeScore - hP
 					awayScore = awayScore - aP
 				}

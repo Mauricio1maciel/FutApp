@@ -7,8 +7,6 @@ import (
 )
 
 func GetTodayMatches() ([]models.WorkerMatch, error) {
-	// 🔥 O WORKER AGORA LÊ DA FONTE DA VERDADE DA ESPN!
-	// Já não precisamos de JOINs. Lemos direto a espn_matches para ver quem está vivo.
 	query := `
         SELECT 
             espn_match_id::TEXT, 
@@ -45,12 +43,9 @@ func GetTodayMatches() ([]models.WorkerMatch, error) {
 }
 
 func GetActiveLeaguesToday() []string {
-	// Agora enviamos os códigos curtos (Chaves do seu ESPNLeagueMap)
-	// O banco de dados fica feliz porque todos têm menos de 10 caracteres!
 	return []string{"BSA", "PL", "PD", "PD", "SA", "CL", "BL1", "FL1", "CLI", "CSU", "WC", "UNL"}
 }
 
-// 2. Salva a ponte de ligação entre ESPN e nosso Banco
 func SaveESPNMatchMapping(matchID string, homeID string, awayID string, matchDate string) error {
 	query := `
 		INSERT INTO espn_matches (espn_match_id, espn_home_team_id, espn_away_team_id, match_date)

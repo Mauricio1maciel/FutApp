@@ -41,8 +41,6 @@ func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
     `
 
 	if roundStr != "" {
-		// 🔥 AJUSTE AQUI: COALESCE garante que se a rodada for NULL (vazia no banco),
-		// ela vira 0 e é lida pelo "0" que enviamos no Handler.
 		query += ` AND COALESCE(m.round, 0) IN (` + roundStr + `)`
 	}
 

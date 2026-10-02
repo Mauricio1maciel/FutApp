@@ -24,14 +24,12 @@ func JWTAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		tokenString := parts[1] // Aqui está o token gigante
+		tokenString := parts[1]
 
-		// Remove possíveis espaços ou quebras de linha invisíveis que o Insomnia possa ter enviado
 		tokenString = strings.TrimSpace(tokenString)
 
 		claims, err := utils.ValidateToken(tokenString)
 		if err != nil {
-			// 🔥 A MÁGICA ESTÁ AQUI: Vai imprimir no seu terminal por que o token falhou!
 			fmt.Printf("\n❌ ERRO DE VALIDAÇÃO DO TOKEN: %v\n", err)
 			http.Error(w, `{"erro": "Token inválido ou expirado"}`, http.StatusUnauthorized)
 			return

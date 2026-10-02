@@ -31,7 +31,6 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		return models.ESPNMatchDB{}, nil, nil, fmt.Errorf("erro unmarshal: %v", err)
 	}
 
-	// EXTRAÇÃO INTELIGENTE DA TEMPORADA DIRETAMENTE DO SEU MODELO
 	seasonStr := strconv.Itoa(data.Header.Season.Year)
 
 	re := regexp.MustCompile(`(\d{4})-(\d{2})`)
@@ -51,7 +50,6 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		match.MatchDate = comp.Date
 		match.Status = comp.Status.Type.State
 
-		// Tenta pegar do Summary (mesmo sabendo que a ESPN costuma esconder aqui)
 		match.Stage = data.Header.Season.Slug
 
 		for _, team := range comp.Competitors {
@@ -76,10 +74,7 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		}
 	}
 
-	// 🔥 O TRUQUE DE MESTRE PARA A ROTA MANUAL (BACKFILL)
-	// Se o grupo estiver vazio e a data for válida (ex: "2026-09-28T..."), vamos buscar ao Scoreboard daquele dia!
 	if match.GroupName == "" && len(match.MatchDate) >= 10 {
-		// Transforma "2026-09-28..." em "20260928"
 		dateParam := match.MatchDate[0:4] + match.MatchDate[5:7] + match.MatchDate[8:10]
 		scoreUrl := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard?dates=%s", espnLeague, dateParam)
 
@@ -100,7 +95,6 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 				} `json:"events"`
 			}
 			if json.NewDecoder(respScore.Body).Decode(&scoreData) == nil {
-				// Procura o nosso jogo no meio dos jogos desse dia
 				for _, evt := range scoreData.Events {
 					if evt.ID == matchID {
 						if evt.Season.Slug != "" {
@@ -157,13 +151,11 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 	return match, lineups, events, nil
 }
 
-// 🔥 FUNÇÃO AJUSTADA COM O SEU TIPO "ESPNMatchDB" E SUA FUNÇÃO "getESPNLeague"
 func UpdateLiveMatchClock(match *models.ESPNMatchDB) {
 	if match == nil || match.MatchID == "" {
 		return
 	}
 
-	// Usando a sua função que já sabe traduzir WC para fifa.world
 	espnLeague := getESPNLeague(match.League)
 	scoreboardURL := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard", espnLeague)
 
@@ -174,7 +166,6 @@ func UpdateLiveMatchClock(match *models.ESPNMatchDB) {
 	}
 	defer resp.Body.Close()
 
-	// Estrutura anônima para pegar apenas o que importa (performance!)
 	var scoreboardData struct {
 		Events []struct {
 			ID     string `json:"id"`
@@ -190,9 +181,7 @@ func UpdateLiveMatchClock(match *models.ESPNMatchDB) {
 	if err := json.NewDecoder(resp.Body).Decode(&scoreboardData); err == nil {
 		for _, event := range scoreboardData.Events {
 			if event.ID == match.MatchID {
-				// Atualiza o relógio!
 				match.Clock = event.Status.DisplayClock
-				// Atualiza o status também, caso a partida tenha acabado nesse meio tempo
 				match.Status = event.Status.Type.State
 				utils.CustomLog("ESPN_CLOCK", "⏰ Relógio atualizado para %s: %s", match.MatchID, match.Clock)
 				break

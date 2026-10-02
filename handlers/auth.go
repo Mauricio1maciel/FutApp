@@ -11,9 +11,7 @@ type GuestLoginRequest struct {
 	DeviceID string `json:"device_id"`
 }
 
-// GuestAuthHandler gera o token silencioso para o app
 func GuestAuthHandler(w http.ResponseWriter, r *http.Request) {
-	// Só aceita método POST
 	if r.Method != http.MethodPost {
 		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
 		return
@@ -25,7 +23,6 @@ func GuestAuthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Chama a função que criamos no utils para gerar o token
 	tokenString, err := utils.GenerateToken(req.DeviceID)
 	if err != nil {
 		utils.CustomLog("AUTH_ERRO", "Falha ao gerar JWT: %v", err)
@@ -35,7 +32,6 @@ func GuestAuthHandler(w http.ResponseWriter, r *http.Request) {
 
 	utils.CustomLog("AUTH", "Novo dispositivo registrado/renovado: %s", req.DeviceID)
 
-	// Devolve o token para o React Native salvar
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"token": tokenString,

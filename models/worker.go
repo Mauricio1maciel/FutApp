@@ -1,8 +1,7 @@
-// // Arquivo: models/worker.go
+// Arquivo: models/worker.go
 
 package models
 
-// WorkerMatch contém apenas os dados cruciais para o motor do Orange Pi
 type WorkerMatch struct {
 	IDEvent       string
 	League        string
@@ -10,7 +9,6 @@ type WorkerMatch struct {
 	Status        string
 }
 
-// 🔥 Estrutura para ler o Scoreboard diário da ESPN
 type ESPNScoreboardResponse struct {
 	Events []struct {
 		ID           string `json:"id"`

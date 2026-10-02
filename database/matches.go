@@ -44,9 +44,7 @@ func GetMatchesByLeague(league string, roundStr string, dateStr string, season s
     )
     WHERE m.league = $1 AND m.season = $2
     `
-	// 🔥 LÓGICA DE FILTRO ALTERADA
 	if dateStr != "" {
-		// Se veio data, ignora rodada e fase. Pega só os jogos desse dia (no fuso BR)
 		query += ` AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE = '` + dateStr + `'::DATE`
 	} else if roundStr != "" {
 		if _, err := strconv.Atoi(roundStr); err == nil {
@@ -179,7 +177,6 @@ func SaveMatch(
 func GetCurrentRound(league string, season string) (int, error) {
 	var round int
 
-	// 🔥 A MÁGICA ATUALIZADA AQUI: Busca o primeiro jogo que ainda não foi finalizado!
 	query := `
 		SELECT round FROM matches 
 		WHERE league = $1 AND season = $2 
@@ -189,7 +186,6 @@ func GetCurrentRound(league string, season string) (int, error) {
 	`
 	err := DB.QueryRow(query, league, season).Scan(&round)
 
-	// Se campeonato acabou, pega a última rodada
 	if err != nil {
 		queryFallback := `
 			SELECT MAX(round) FROM matches 
@@ -208,7 +204,6 @@ func GetCurrentRound(league string, season string) (int, error) {
 func GetCurrentPhase(league string, season string) string {
 	var stage string
 
-	// 🔥 CORREÇÃO: Adicionado 'AND season = $2' para evitar falhas em campeonatos de anos diferentes
 	query := `
         SELECT stage FROM matches 
         WHERE league = $1 
@@ -220,7 +215,6 @@ func GetCurrentPhase(league string, season string) string {
     `
 	err := DB.QueryRow(query, league, season).Scan(&stage)
 
-	// Se não achou (ou está na fase de grupos), retorna o marcador de rodada numérica
 	if err != nil {
 		return "CURRENT_ROUND"
 	}
@@ -230,11 +224,10 @@ func GetCurrentPhase(league string, season string) string {
 
 func GetLatestSeason(league string) string {
 	var season string
-	// Busca a season mais recente cadastrada para aquela liga
 	query := `SELECT season FROM matches WHERE league = $1 ORDER BY season DESC LIMIT 1`
 	err := DB.QueryRow(query, league).Scan(&season)
 	if err != nil {
-		return "2026" // Fallback
+		return "2026"
 	}
 	return season
 }

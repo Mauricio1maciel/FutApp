@@ -19,7 +19,6 @@ func UpsertESPNPlayerGeneric(playerID int64, name string, headshot string, teamI
 	return err
 }
 
-// Salva estritamente as estatísticas (Gols, Assistências, Partidas)
 func UpsertPlayerStat(playerID int64, espnTeamID int64, league, season string, goals, assists, matches int) error {
 	query := `
     INSERT INTO player_stats (espn_player_id, espn_team_id, league, season, goals, assists, matches)
@@ -35,16 +34,12 @@ func UpsertPlayerStat(playerID int64, espnTeamID int64, league, season string, g
 	return err
 }
 
-// Busca os dados montando o ranking com as tabelas normalizadas
-// Busca os dados montando o ranking com as tabelas normalizadas
 func GetTopStats(league string, season string, statType string) ([]models.PlayerStat, error) {
-	// 🔥 A MÁGICA DO DESEMPATE:
-	// Para Gols: Ordena por Gols -> depois Assistências -> depois Menos Jogos
+
 	orderBy := "ps.goals DESC, ps.assists DESC, ps.matches ASC"
 	whereClause := "ps.goals > 0"
 
 	if statType == "assists" {
-		// Para Assistências: Ordena por Assistências -> depois Gols -> depois Menos Jogos
 		orderBy = "ps.assists DESC, ps.goals DESC, ps.matches ASC"
 		whereClause = "ps.assists > 0"
 	}

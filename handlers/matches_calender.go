@@ -8,9 +8,9 @@ import (
 )
 
 func CalendarHandler(w http.ResponseWriter, r *http.Request) {
-	leaguesParam := r.URL.Query().Get("leagues") // ex: "WC,BSA,PL"
-	month := r.URL.Query().Get("month")          // ex: "06"
-	year := r.URL.Query().Get("year")            // ex: "2026"
+	leaguesParam := r.URL.Query().Get("leagues")
+	month := r.URL.Query().Get("month")
+	year := r.URL.Query().Get("year")
 
 	if leaguesParam == "" || month == "" || year == "" {
 		http.Error(w, `{"error": "Faltam parâmetros: leagues, month, year"}`, http.StatusBadRequest)

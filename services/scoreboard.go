@@ -19,7 +19,6 @@ func SyncESPNScoreboardForLeague(leagueCode string) {
 	}
 	defer resp.Body.Close()
 
-	// 🔥 1. A ESTRUTURA AGORA PESCA O GRUPO E A FASE DIRETAMENTE DO SCOREBOARD
 	var data struct {
 		Events []struct {
 			ID     string `json:"id"`
@@ -52,11 +51,9 @@ func SyncESPNScoreboardForLeague(leagueCode string) {
 			if status == "pre" || status == "in" || status == "post" {
 				utils.CustomLog("WORKER_ESPN", "Registo Proativo: Puxando resumo do jogo %s (%s)", matchID, leagueCode)
 
-				// Busca os detalhes no /summary (que vêm sem o grupo)
 				m, lineups, matchEvents, err := FetchAndParseESPNMatch(matchID, leagueCode)
 
 				if err == nil {
-					// 🔥 2. A MÁGICA: Injetamos o Grupo e a Fase que vieram do /scoreboard na nossa variável!
 					if event.Season.Slug != "" {
 						m.Stage = event.Season.Slug
 					}

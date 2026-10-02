@@ -11,7 +11,6 @@ type CalendarDay struct {
 }
 
 func GetCalendarCounts(leagues []string, month string, year string) ([]CalendarDay, error) {
-	// Cria uma string segura para o IN clause: 'WC','BSA','PL'
 	var leaguesFormatted []string
 	for _, l := range leagues {
 		leaguesFormatted = append(leaguesFormatted, "'"+l+"'")

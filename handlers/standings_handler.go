@@ -59,7 +59,6 @@ func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Se NÃO forçou a atualização, tenta buscar do banco
 	if !forceUpdate {
 		result, err := database.GetStandingsByLeague(league, season)
 
@@ -72,7 +71,6 @@ func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Se chegou aqui, ou o banco está vazio, ou forçamos com ?update=true
 	utils.CustomLog("API", "Tabela vazia ou atualização forçada. Calculando: %s", league)
 	forceCalculateAndSaveStandings(league, season)
 
@@ -108,7 +106,6 @@ func forceCalculateAndSaveStandings(league, season string) {
 
 	var standings []models.Standing
 
-	// 🔥 O DESVIO INTELIGENTE
 	if league == "WC" {
 		standings = services.BuildCupStandings(matches, criteria)
 	} else if league == "UNL" {

@@ -1,6 +1,5 @@
 package models
 
-// Estrutura que enviamos para o App (Mantém-se igual)
 type PlayerStat struct {
 	Rank     int    `json:"rank"`
 	PlayerID string `json:"player_id"`
@@ -16,19 +15,18 @@ type LeagueStatsResponse struct {
 	TopAssists []PlayerStat `json:"top_assists"`
 }
 
-// 🔥 Estrutura crua ATUALIZADA para capturar o ID do time da competição
 type ESPNStatisticsResponse struct {
 	Stats []struct {
 		Name    string `json:"name"`
 		Leaders []struct {
 			Athlete struct {
 				ID          string `json:"id"`
-				DisplayName string `json:"displayName"` // Necessário para atualizar o cadastro base
+				DisplayName string `json:"displayName"`
 				Headshot    struct {
-					Href string `json:"href"` // Necessário para atualizar a foto
+					Href string `json:"href"`
 				} `json:"headshot"`
 				Team struct {
-					ID string `json:"id"` // 🔥 AQUI: O ID da França (478) em vez do Real Madrid
+					ID string `json:"id"`
 				} `json:"team"`
 				Statistics []struct {
 					Name  string  `json:"name"`

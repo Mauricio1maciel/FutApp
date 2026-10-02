@@ -17,7 +17,6 @@ func ClearStandings(league string, season string) error {
 
 func SaveStandings(league string, season string, standings []models.Standing) error {
 	for _, s := range standings {
-		// ADICIONADO: group_name no INSERT e o parâmetro $14
 		_, err := DB.Exec(`
             INSERT INTO standings
             (league, position, team_id, played, wins, draws, losses, goals_for, goals_against, goal_diff, points, zone, season, group_name)
@@ -36,11 +35,10 @@ func SaveStandings(league string, season string, standings []models.Standing) er
 			s.Points,
 			s.Zone,
 			season,
-			s.GroupName, // <-- O novo campo do grupo
+			s.GroupName,
 		)
 
 		if err != nil {
-			// 🔥 AGORA ELE VAI GRITAR NO TERMINAL SE DER ERRO!
 			utils.CustomLog("DATABASE_ERRO", "Falha ao salvar time ID %d na tabela standings: %v", s.TeamID, err)
 			return err
 		}
@@ -51,7 +49,6 @@ func SaveStandings(league string, season string, standings []models.Standing) er
 
 func GetStandingsByLeague(league string, season string) ([]models.Standing, error) {
 
-	// 🔥 ADICIONADO: s.team_id no SELECT
 	rows, err := DB.Query(`
     SELECT 
         s.position,
@@ -85,7 +82,6 @@ func GetStandingsByLeague(league string, season string) ([]models.Standing, erro
 	for rows.Next() {
 		var s models.Standing
 
-		// 🔥 ADICIONADO: &s.TeamID no SCAN
 		err := rows.Scan(
 			&s.Position,
 			&s.TeamID,
@@ -118,7 +114,6 @@ func GetStandingsByLeague(league string, season string) ([]models.Standing, erro
 
 func IsLeagueFinished(league string) bool {
 	var count int
-	// Busca jogos que AINDA NÃO acabaram nem foram cancelados
 	query := `
         SELECT COUNT(*) 
         FROM matches 
@@ -126,9 +121,8 @@ func IsLeagueFinished(league string) bool {
     `
 	err := DB.QueryRow(query, league).Scan(&count)
 	if err != nil {
-		return false // Na dúvida, diz que não acabou
+		return false
 	}
 
-	// Se a contagem for 0, todos os jogos já terminaram!
 	return count == 0
 }

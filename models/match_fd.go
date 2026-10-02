@@ -24,7 +24,7 @@ type FDMatch struct {
 
 	Score struct {
 		Winner   string `json:"winner"`
-		Duration string `json:"duration"` // ADICIONADO: Diz se foi para pênaltis (PENALTY_SHOOTOUT)
+		Duration string `json:"duration"`
 
 		FullTime struct {
 			Home *int `json:"home"`

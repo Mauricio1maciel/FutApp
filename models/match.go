@@ -18,7 +18,7 @@ type Match struct {
 
 	HomeScore   int    `json:"home_score"`
 	AwayScore   int    `json:"away_score"`
-	HomePenalty *int   `json:"home_penalty,omitempty"` // ADICIONADO
+	HomePenalty *int   `json:"home_penalty,omitempty"`
 	AwayPenalty *int   `json:"away_penalty,omitempty"`
 	DateEvent   string `json:"date_event"`
 	Status      string `json:"status"`
