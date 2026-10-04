@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"regexp"
 	"strconv"
 )
@@ -15,7 +14,7 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 	espnLeague := getESPNLeague(leagueCode)
 	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/summary?event=%s", espnLeague, matchID)
 
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return models.ESPNMatchDB{}, nil, nil, err
 	}
@@ -78,7 +77,7 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		dateParam := match.MatchDate[0:4] + match.MatchDate[5:7] + match.MatchDate[8:10]
 		scoreUrl := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard?dates=%s", espnLeague, dateParam)
 
-		respScore, errScore := http.Get(scoreUrl)
+		respScore, errScore := httpClient.Get(scoreUrl)
 		if errScore == nil {
 			defer respScore.Body.Close()
 			var scoreData struct {
@@ -159,7 +158,7 @@ func UpdateLiveMatchClock(match *models.ESPNMatchDB) {
 	espnLeague := getESPNLeague(match.League)
 	scoreboardURL := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard", espnLeague)
 
-	resp, err := http.Get(scoreboardURL)
+	resp, err := httpClient.Get(scoreboardURL)
 	if err != nil {
 		utils.CustomLog("ESPN_CLOCK", "Erro ao buscar scoreboard para o jogo %s: %v", match.MatchID, err)
 		return

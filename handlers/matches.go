@@ -8,13 +8,17 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 )
 
 var lastReset time.Time
 var requestCount int
+var rateLimitMu sync.Mutex
 
 func canUpdate(force bool) bool {
+	rateLimitMu.Lock()
+	defer rateLimitMu.Unlock()
 
 	now := time.Now()
 
@@ -136,7 +140,7 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 			utils.CustomLog("API", "Atualização em segundo plano concluída para: %s", lg)
 		}(league)
 	} else {
-		log.Println("⏱ Limite de requisições atingido")
+		utils.CustomLog("RATE_LIMIT", "⏱ Limite de requisições atingido (%s)", league)
 	}
 
 	matches, err := database.GetMatchesByLeague(league, roundStr, dateStr, season, isCurrentRound)

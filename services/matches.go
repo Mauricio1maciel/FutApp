@@ -3,7 +3,6 @@ package services
 import (
 	"encoding/json"
 	"io"
-	"net/http"
 
 	"App-Futebol/models"
 )
@@ -16,7 +15,7 @@ func GetSerieBMatches() ([]models.Event, error) {
 
 	url := "https://www.thesportsdb.com/api/v1/json/3/eventsseason.php?id=4404"
 
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, err
 	}

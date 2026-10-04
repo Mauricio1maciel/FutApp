@@ -25,8 +25,7 @@ func GetMatchesByLeagueCode(leagueCode string) ([]models.FDMatch, error) {
 
 	req.Header.Set("X-Auth-Token", token)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

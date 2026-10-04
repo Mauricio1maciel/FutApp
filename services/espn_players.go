@@ -6,14 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"strconv"
 )
 
 func SyncESPNRoster(leagueESPNSlug string, espnTeamID int) error {
 	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%v/teams/%v/roster", leagueESPNSlug, espnTeamID)
 
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return err
 	}

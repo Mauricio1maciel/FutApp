@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -30,8 +31,12 @@ func getSeasonByLeague(league string) string {
 }
 
 var lastStandingsUpdate = make(map[string]time.Time)
+var lastStandingsUpdateMu sync.Mutex
 
 func canUpdateStandingsBackground(league string) bool {
+	lastStandingsUpdateMu.Lock()
+	defer lastStandingsUpdateMu.Unlock()
+
 	now := time.Now()
 	last, exists := lastStandingsUpdate[league]
 
@@ -111,13 +116,27 @@ func forceCalculateAndSaveStandings(league, season string) {
 	} else if league == "UNL" {
 		standings = services.BuildUNLStandings(matches, criteria)
 	} else {
-		standings = services.BuildStandings(matches, winners, rule, zones, criteria)
+		// Jogos com time fora da tabela teams (ex: IDs da ESPN gravados por engano)
+		// criariam times fantasmas e deslocariam a zona de rebaixamento
+		validMatches := make([]models.Match, 0, len(matches))
+		for _, m := range matches {
+			if m.HomeTeam == "" || m.AwayTeam == "" {
+				// ID 0 = confronto de mata-mata ainda indefinido, não é erro
+				if m.APIHomeTeamID != 0 && m.APIAwayTeamID != 0 {
+					utils.CustomLog("DATABASE_ERRO", "Jogo %s ignorado na classificação de %s: time desconhecido (%d x %d)", m.IDEvent, league, m.APIHomeTeamID, m.APIAwayTeamID)
+				}
+				continue
+			}
+			validMatches = append(validMatches, m)
+		}
+		standings = services.BuildStandings(validMatches, winners, rule, zones, criteria)
 	}
 
 	for i := range standings {
 		standings[i].Season = season
 	}
 
-	database.ClearStandings(league, season)
-	database.SaveStandings(league, season, standings)
+	if err := database.ReplaceStandings(league, season, standings); err != nil {
+		utils.CustomLog("DATABASE_ERRO", "Falha ao salvar classificação de %s: %v", league, err)
+	}
 }

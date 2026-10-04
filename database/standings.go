@@ -5,19 +5,26 @@ import (
 	"App-Futebol/utils"
 )
 
-func ClearStandings(league string, season string) error {
-	_, err := DB.Exec(
-		"DELETE FROM standings WHERE league = $1 AND season = $2",
-		league,
-		season,
-	)
+// ReplaceStandings troca a classificação inteira numa única transação,
+// para o app nunca ler a tabela vazia ou com linhas duplicadas.
+func ReplaceStandings(league string, season string, standings []models.Standing) error {
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-	return err
-}
+	// Serializa recálculos simultâneos da mesma liga/temporada
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext($1))`, league+"|"+season); err != nil {
+		return err
+	}
 
-func SaveStandings(league string, season string, standings []models.Standing) error {
+	if _, err := tx.Exec("DELETE FROM standings WHERE league = $1 AND season = $2", league, season); err != nil {
+		return err
+	}
+
 	for _, s := range standings {
-		_, err := DB.Exec(`
+		_, err := tx.Exec(`
             INSERT INTO standings
             (league, position, team_id, played, wins, draws, losses, goals_for, goals_against, goal_diff, points, zone, season, group_name)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
@@ -44,7 +51,7 @@ func SaveStandings(league string, season string, standings []models.Standing) er
 		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func GetStandingsByLeague(league string, season string) ([]models.Standing, error) {

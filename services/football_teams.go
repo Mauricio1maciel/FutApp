@@ -35,8 +35,7 @@ func GetTeams(league string) ([]models.Team, error) {
 	token := os.Getenv("API_TOKEN")
 	req.Header.Set("X-Auth-Token", token)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

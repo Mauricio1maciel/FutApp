@@ -22,6 +22,8 @@ var ActiveLogs = map[string]bool{
 	"WORKER_BUSCA_ESCALACAO": true,
 	"SCOREBOARD":             true,
 	"UNL":                    true,
+	"RATE_LIMIT":             false,
+	"SYNC_TEAMS":             true,
 }
 
 func CustomLog(module string, format string, args ...interface{}) {

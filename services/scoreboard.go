@@ -5,14 +5,13 @@ import (
 	"App-Futebol/utils"
 	"encoding/json"
 	"fmt"
-	"net/http"
 )
 
 func SyncESPNScoreboardForLeague(leagueCode string) {
 	espnLeague := getESPNLeague(leagueCode)
 	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard", espnLeague)
 
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		utils.CustomLog("WORKER_ESPN", "Erro buscar scoreboard da liga %s: %v", leagueCode, err)
 		return

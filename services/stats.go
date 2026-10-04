@@ -6,9 +6,7 @@ import (
 	"App-Futebol/utils"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
-	"time"
 )
 
 func SyncLeagueStatsBackground(leagueCode string, season string) {
@@ -16,8 +14,7 @@ func SyncLeagueStatsBackground(leagueCode string, season string) {
 	espnLeague := getESPNLeague(leagueCode)
 
 	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/statistics", espnLeague)
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return
 	}

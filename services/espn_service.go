@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 )
 
 var ESPNLeagueMap = map[string]string{
@@ -32,7 +31,7 @@ func GetLiveScoreboard(leagueCode string, date string) ([]models.AppLiveMatch, e
 		url = fmt.Sprintf("%s?dates=%s", url, date)
 	}
 
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao acessar ESPN: %v", err)
 	}
