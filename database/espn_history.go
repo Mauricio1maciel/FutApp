@@ -13,18 +13,36 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 		return err
 	}
 
-	// 🔥 1. AUTO-REGISTO NA TABELA TEAMS
-	_, _ = tx.Exec(`
-        INSERT INTO teams (api_id, espn_team_id, name, crest_url) 
-        VALUES ($1::BIGINT, $1::BIGINT, $2, $3) 
-        ON CONFLICT (api_id) DO NOTHING`,
-		match.ESPNHomeTeamID, match.HomeTeam, match.HomeLogo)
+	defer tx.Rollback()
 
-	_, _ = tx.Exec(`
-        INSERT INTO teams (api_id, espn_team_id, name, crest_url) 
-        VALUES ($1::BIGINT, $1::BIGINT, $2, $3) 
-        ON CONFLICT (api_id) DO NOTHING`,
-		match.ESPNAwayTeamID, match.AwayTeam, match.AwayLogo)
+	// 🔥 1. AUTO-REGISTO NA TABELA TEAMS (só UNL: a football-data não cobre a Liga das Nações,
+	// então as seleções são cadastradas com o próprio ID da ESPN como api_id).
+	// Nas outras ligas os times vêm da football-data e são vinculados pelo SyncESPNTeamLinks.
+	// ON CONFLICT sem alvo: ignora conflito em api_id E em espn_team_id (time já vinculado).
+	// Qualquer erro aqui aborta a transação no Postgres, por isso não pode ser ignorado.
+	if match.League == "UNL" {
+		teamQuery := `
+            INSERT INTO teams (api_id, espn_team_id, name, crest_url)
+            VALUES ($1::BIGINT, $1::BIGINT, $2, $3)
+            ON CONFLICT DO NOTHING`
+
+		teams := []struct {
+			id         int64
+			name, logo string
+		}{
+			{match.ESPNHomeTeamID, match.HomeTeam, match.HomeLogo},
+			{match.ESPNAwayTeamID, match.AwayTeam, match.AwayLogo},
+		}
+		for _, t := range teams {
+			if t.id == 0 || t.name == "" {
+				continue // Time ainda indefinido (ex: mata-mata sem confronto)
+			}
+			if _, err = tx.Exec(teamQuery, t.id, t.name, t.logo); err != nil {
+				utils.CustomLog("DATABASE_ERRO", "Falha ao registrar time %d: %v", t.id, err)
+				return err
+			}
+		}
+	}
 
 	// 🔥 2. SALVAR NA ESPN_MATCHES (AGORA COM SEASON E 13 PARÂMETROS!)
 	_, err = tx.Exec(
@@ -55,8 +73,17 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 		return err
 	}
 
-	tx.Exec(`DELETE FROM espn_match_lineups WHERE espn_match_id = $1::BIGINT`, match.MatchID)
-	tx.Exec(`DELETE FROM espn_match_events WHERE espn_match_id = $1::BIGINT`, match.MatchID)
+	// Só substitui a escalação se a ESPN devolveu uma nova; resposta vazia não apaga a que já existe
+	if len(lineups) > 0 {
+		if _, err = tx.Exec(`DELETE FROM espn_match_lineups WHERE espn_match_id = $1::BIGINT`, match.MatchID); err != nil {
+			utils.CustomLog("DATABASE_ERRO", "Falha ao limpar escalação: %v", err)
+			return err
+		}
+	}
+	if _, err = tx.Exec(`DELETE FROM espn_match_events WHERE espn_match_id = $1::BIGINT`, match.MatchID); err != nil {
+		utils.CustomLog("DATABASE_ERRO", "Falha ao limpar eventos: %v", err)
+		return err
+	}
 
 	for _, l := range lineups {
 		_, err = tx.Exec(
