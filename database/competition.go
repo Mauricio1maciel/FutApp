@@ -6,10 +6,12 @@ func GetCompetitionRule(league string, season string) (*models.CompetitionRule, 
 
 	var rule models.CompetitionRule
 
+	// Temporada sem regra cadastrada usa a mais recente anterior a ela
 	row := DB.QueryRow(`
 		SELECT season, libertadores, pre_libertadores, sul_americana, rebaixamento
 		FROM competition_rules
-		WHERE league = $1 AND season = $2
+		WHERE league = $1 AND season <= $2
+		ORDER BY season DESC
 		LIMIT 1
 	`, league, season)
 
@@ -31,10 +33,10 @@ func GetCompetitionRule(league string, season string) (*models.CompetitionRule, 
 func GetWinnersBySeasonAndSeason(league string, season string) ([]models.Winner, error) {
 
 	rows, err := DB.Query(`
-		SELECT league , season, competition, team_name
+		SELECT competition, team_name
 		FROM competition_winners
 		WHERE league = $1 AND season = $2
-	`, season, league)
+	`, league, season)
 
 	if err != nil {
 		return nil, err
@@ -60,10 +62,15 @@ func GetWinnersBySeasonAndSeason(league string, season string) ([]models.Winner,
 
 func GetTieBreakers(league string, season string) ([]string, error) {
 
+	// Temporada sem critérios cadastrados usa a mais recente anterior a ela
 	rows, err := DB.Query(`
 		SELECT criterion
 		FROM competition_tiebreakers
-		WHERE league = $1 AND season = $2
+		WHERE league = $1
+		  AND season = (
+		      SELECT MAX(season) FROM competition_tiebreakers
+		      WHERE league = $1 AND season <= $2
+		  )
 		ORDER BY priority
 	`, league, season)
 
@@ -76,9 +83,11 @@ func GetTieBreakers(league string, season string) ([]string, error) {
 
 	for rows.Next() {
 		var c string
-		rows.Scan(&c)
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
+		}
 		criteria = append(criteria, c)
 	}
 
-	return criteria, nil
+	return criteria, rows.Err()
 }

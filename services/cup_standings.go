@@ -9,6 +9,7 @@ import (
 
 func BuildCupStandings(matches []models.Match, criteria []string) []models.Standing {
 	utils.CustomLog("COPA", "🔥 Iniciando cálculo da Copa! Total de jogos recebidos: %d", len(matches))
+	criteria = withDefaultCriteria(criteria)
 
 	groupMatches := make(map[string][]models.Match)
 	for _, m := range matches {
@@ -89,6 +90,7 @@ func BuildCupStandings(matches []models.Match, criteria []string) []models.Stand
 }
 func BuildUNLStandings(matches []models.Match, criteria []string) []models.Standing {
 	utils.CustomLog("UNL", "🔥 Iniciando cálculo da Nations League! Total de jogos recebidos: %d", len(matches))
+	criteria = withDefaultCriteria(criteria)
 
 	groupMatches := make(map[string][]models.Match)
 	for _, m := range matches {

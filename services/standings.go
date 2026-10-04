@@ -186,6 +186,28 @@ func applyHeadToHead(group []models.Standing, matches []models.Match) []models.S
 	return group
 }
 
+// withDefaultCriteria garante que a classificação sempre comece por pontos e tenha
+// saldo e gols pró como desempate, mesmo com critérios faltando no banco
+// (sem isso, liga sem critério cadastrado sai em ordem alfabética).
+func withDefaultCriteria(criteria []string) []string {
+	has := make(map[string]bool, len(criteria))
+	for _, c := range criteria {
+		has[c] = true
+	}
+
+	result := make([]string, 0, len(criteria)+3)
+	if !has["points"] {
+		result = append(result, "points")
+	}
+	result = append(result, criteria...)
+	for _, c := range []string{"goal_diff", "goals_for"} {
+		if !has[c] {
+			result = append(result, c)
+		}
+	}
+	return result
+}
+
 func compareTeams(
 	a, b models.Standing,
 	matches []models.Match,
@@ -357,6 +379,7 @@ func BuildStandings(
 	criteria []string,
 ) []models.Standing {
 
+	criteria = withDefaultCriteria(criteria)
 	table := CalculateStandings(matches)
 	s := MapToSlice(table)
 

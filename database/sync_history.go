@@ -12,9 +12,12 @@ func GetMissingMatches(league string) ([]map[string]string, error) {
         LEFT JOIN espn_matches e ON (
             th.espn_team_id = e.espn_home_team_id 
             AND ta.espn_team_id = e.espn_away_team_id 
-            AND m.match_date = e.match_date::DATE
+            AND m.match_date::DATE = e.match_date::DATE
         )
-        WHERE m.league = $1 AND e.espn_match_id IS NULL
+        WHERE m.league = $1
+          AND m.status = 'FINISHED'
+          AND e.espn_match_id IS NULL
+        ORDER BY m.match_date DESC
         LIMIT 10`
 
 	rows, err := DB.Query(query, league)
