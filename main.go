@@ -39,6 +39,10 @@ func main() {
 	// 4. Se não tiver a flag (Render), sobe a API Web normalmente
 	utils.CustomLog("SISTEMA", "Iniciando em MODO API WEB...")
 
+	if os.Getenv("JWT_SECRET") == "" {
+		log.Fatal("JWT_SECRET não configurado! Defina a variável de ambiente antes de subir a API.")
+	}
+
 	services.StartBackgroundUpdater()
 	servico.StartBackgroundScheduler()
 
@@ -69,12 +73,15 @@ func main() {
 	http.HandleFunc("/match_history_old", middlewares.JWTAuth(handlers.SyncPastMatchHandler))
 	http.HandleFunc("/team/players_espn", middlewares.JWTAuth(handlers.SyncESPNTeamHandler))
 
-	// 🛡️ ROTAS ADMIN (Também protegidas para ninguém acionar as rotinas indevidamente)
-	http.HandleFunc("/admin/sync-teams", middlewares.JWTAuth(handlers.SyncTeamsHandler))
-	http.HandleFunc("/admin/force-sync", middlewares.JWTAuth(handlers.ForceSyncHistoryHandler))
+	// 🛡️ ROTAS ADMIN (Exigem o header X-Admin-Key, não basta o token de convidado)
+	http.HandleFunc("/admin/sync-teams", middlewares.AdminAuth(handlers.SyncTeamsHandler))
+	http.HandleFunc("/admin/force-sync", middlewares.AdminAuth(handlers.ForceSyncHistoryHandler))
 
-	http.HandleFunc("/admin/run-image-bot", middlewares.JWTAuth(func(w http.ResponseWriter, r *http.Request) {
-		go services.RunImageBot()
+	http.HandleFunc("/admin/run-image-bot", middlewares.AdminAuth(func(w http.ResponseWriter, r *http.Request) {
+		if !services.StartImageBot() {
+			w.Write([]byte("Robô de imagens já está rodando."))
+			return
+		}
 		w.Write([]byte("Robô de imagens iniciado em background!"))
 	}))
 

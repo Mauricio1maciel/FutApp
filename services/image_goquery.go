@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gocolly/colly/v2"
@@ -54,6 +55,17 @@ func SearchPlayerDetails(playerName string, teamName string) (string, string) {
 	c2.Visit(profileURL)
 
 	return imageURL, marketValue
+}
+
+var imageBotRunning atomic.Bool
+
+// StartImageBot sobe o robô em background apenas se ele ainda não estiver rodando.
+func StartImageBot() bool {
+	if !imageBotRunning.CompareAndSwap(false, true) {
+		return false
+	}
+	go RunImageBot()
+	return true
 }
 
 func RunImageBot() {

@@ -3,9 +3,11 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+
+	"github.com/lib/pq"
 )
 
-func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
+func GetMatchesByTeamID(teamID int64, rounds []int64) ([]models.Match, error) {
 	query := `
     SELECT 
         COALESCE(e.espn_match_id::TEXT, 0::TEXT), 
@@ -40,13 +42,16 @@ func GetMatchesByTeamID(teamID int64, roundStr string) ([]models.Match, error) {
     WHERE (m.api_home_team_id = $1 OR m.api_away_team_id = $1)
     `
 
-	if roundStr != "" {
-		query += ` AND COALESCE(m.round, 0) IN (` + roundStr + `)`
+	args := []interface{}{teamID}
+
+	if len(rounds) > 0 {
+		args = append(args, pq.Array(rounds))
+		query += ` AND COALESCE(m.round, 0) = ANY($2)`
 	}
 
 	query += ` ORDER BY m.match_date ASC`
 
-	rows, err := DB.Query(query, teamID)
+	rows, err := DB.Query(query, args...)
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Erro na query GetMatchesByTeamID: %v", err)
 		return nil, err

@@ -44,13 +44,18 @@ func GetMatchesByLeague(league string, roundStr string, dateStr string, season s
     )
     WHERE m.league = $1 AND m.season = $2
     `
+	args := []interface{}{league, season}
+
 	if dateStr != "" {
-		query += ` AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE = '` + dateStr + `'::DATE`
+		args = append(args, dateStr)
+		query += ` AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE = $3::DATE`
 	} else if roundStr != "" {
-		if _, err := strconv.Atoi(roundStr); err == nil {
-			query += ` AND m.round = ` + roundStr
+		if round, err := strconv.Atoi(roundStr); err == nil {
+			args = append(args, round)
+			query += ` AND m.round = $3`
 		} else {
-			query += ` AND m.stage = '` + roundStr + `'`
+			args = append(args, roundStr)
+			query += ` AND m.stage = $3`
 		}
 
 		if isCurrentRound && (league == "WC" || league == "CL" || league == "CLI") {
@@ -62,7 +67,7 @@ func GetMatchesByLeague(league string, roundStr string, dateStr string, season s
 
 	query += ` ORDER BY m.match_date ASC`
 
-	rows, err := DB.Query(query, league, season)
+	rows, err := DB.Query(query, args...)
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Erro na query GetMatchesByLeague: %v", err)
 		return nil, err
@@ -224,7 +229,8 @@ func GetCurrentPhase(league string, season string) string {
 
 func GetLatestSeason(league string) string {
 	var season string
-	query := `SELECT season FROM matches WHERE league = $1 ORDER BY season DESC LIMIT 1`
+	// Sem o filtro, um único jogo com season NULL vem primeiro no DESC e derruba a consulta
+	query := `SELECT season FROM matches WHERE league = $1 AND COALESCE(season, '') <> '' ORDER BY season DESC LIMIT 1`
 	err := DB.QueryRow(query, league).Scan(&season)
 	if err != nil {
 		return "2026"

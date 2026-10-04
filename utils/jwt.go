@@ -11,13 +11,9 @@ import (
 )
 
 // Pega a chave secreta e GARANTE que ela seja do tipo []byte
+// (o main.go impede a API de subir sem JWT_SECRET)
 func getSecretKey() []byte {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		return []byte("chave_secreta_padrao_dev")
-	}
-	// O segredo está aqui: converter explicitamente
-	return []byte(secret)
+	return []byte(os.Getenv("JWT_SECRET"))
 }
 
 // Claims define o que vai "escrito" dentro do token

@@ -2,7 +2,8 @@ package database
 
 import (
 	"App-Futebol/utils"
-	"strings"
+
+	"github.com/lib/pq"
 )
 
 type CalendarDay struct {
@@ -11,22 +12,16 @@ type CalendarDay struct {
 }
 
 func GetCalendarCounts(leagues []string, month string, year string) ([]CalendarDay, error) {
-	var leaguesFormatted []string
-	for _, l := range leagues {
-		leaguesFormatted = append(leaguesFormatted, "'"+l+"'")
-	}
-	leaguesIn := strings.Join(leaguesFormatted, ",")
-
 	query := `
-		SELECT TO_CHAR(match_date AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS day, COUNT(*) 
-		FROM matches 
-		WHERE league IN (` + leaguesIn + `)
+		SELECT TO_CHAR(match_date AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS day, COUNT(*)
+		FROM matches
+		WHERE league = ANY($3)
 		  AND TO_CHAR(match_date AT TIME ZONE 'America/Sao_Paulo', 'MM') = $1
 		  AND TO_CHAR(match_date AT TIME ZONE 'America/Sao_Paulo', 'YYYY') = $2
 		GROUP BY day
 	`
 
-	rows, err := DB.Query(query, month, year)
+	rows, err := DB.Query(query, month, year, pq.Array(leagues))
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Erro na query GetCalendarCounts: %v", err)
 		return nil, err
