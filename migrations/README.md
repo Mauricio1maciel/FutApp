@@ -31,7 +31,9 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 |---|---|
 | 001_fix_trg_sync_espn_to_matches | ✅ |
 | 002_remove_clubes_espn_duplicados | ✅ |
-| 003_vincula_selecoes_unl_team_leagues | ⏳ |
+| 003_vincula_selecoes_unl_team_leagues | ✅ |
+| 004_rls_e_indices | ⏳ |
+| 005_tabela_users | ⏳ |
 
 ## Criando uma mudança nova
 
