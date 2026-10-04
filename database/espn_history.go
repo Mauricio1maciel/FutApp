@@ -41,6 +41,15 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 				utils.CustomLog("DATABASE_ERRO", "Falha ao registrar time %d: %v", t.id, err)
 				return err
 			}
+			// Vincula à UNL (busca e detalhes exigem team_leagues). Usa o api_id do time
+			// dono do espn_team_id: seleções já cadastradas pela Copa mantêm o ID da football-data.
+			if _, err = tx.Exec(`
+                INSERT INTO team_leagues (team_api_id, league, season)
+                SELECT api_id, 'UNL', $2 FROM teams WHERE espn_team_id = $1 AND $2 <> ''
+                ON CONFLICT DO NOTHING`, t.id, match.Season); err != nil {
+				utils.CustomLog("DATABASE_ERRO", "Falha ao vincular time %d à UNL: %v", t.id, err)
+				return err
+			}
 		}
 	}
 

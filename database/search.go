@@ -11,12 +11,12 @@ func SearchTeamsGlobal(query string) ([]models.Team, error) {
             t.id, 
             t.api_id, 
             t.name, 
-            MAX(tl.league) AS league, 
-            t.stadium, 
-            t.crest_url 
+            MAX(tl.league) AS league,
+            COALESCE(t.stadium, ''),
+            COALESCE(t.crest_url, '')
          FROM teams t
          JOIN team_leagues tl ON t.api_id = tl.team_api_id
-         WHERE unaccent(t.name) ILIKE unaccent('%' || $1 || '%') 
+         WHERE unaccent(t.name) ILIKE unaccent('%' || $1 || '%')
          GROUP BY t.id, t.api_id, t.name, t.stadium, t.crest_url -- 🔥 Agrupa o time num só
          LIMIT 5`,
 		query,
@@ -30,9 +30,11 @@ func SearchTeamsGlobal(query string) ([]models.Team, error) {
 	for rows.Next() {
 		var t models.Team
 		err := rows.Scan(&t.ID, &t.ApiID, &t.Name, &t.League, &t.Stadium, &t.Crest)
-		if err == nil {
-			teams = append(teams, t)
+		if err != nil {
+			utils.CustomLog("DB_ERRO", "Erro no Scan da busca de times: %v", err)
+			continue
 		}
+		teams = append(teams, t)
 	}
 
 	if teams == nil {

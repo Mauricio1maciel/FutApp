@@ -27,7 +27,10 @@ func Connect() {
 	// A URL deve ser montada exatamente assim:
 	// postgres://usuario:senha@host:port/dbname?params
 	// Ajuste a string de conexão para isto:
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&prepareThreshold=0&binary_parameters=yes",
+	// prepareThreshold é parâmetro do JDBC (Java): o lib/pq repassa ao servidor e um
+	// PostgreSQL comum recusa a conexão. binary_parameters é do lib/pq e evita prepared
+	// statements nomeados, necessário atrás do pooler do Supabase.
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&binary_parameters=yes",
 		user, password, host, port, dbname)
 
 	db, err := sql.Open("postgres", connStr)

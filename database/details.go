@@ -10,7 +10,7 @@ func GetTeamByApiID(apiID int64) (models.Team, error) {
 	utils.CustomLog("DB_INFO", "Iniciando busca de detalhes para o ID: %d", apiID)
 
 	err := DB.QueryRow(
-		`SELECT id, api_id, name, tl.league, stadium, crest_url 
+		`SELECT id, api_id, name, tl.league, COALESCE(stadium, ''), COALESCE(crest_url, '')
          FROM teams t
          join team_leagues tl on t.api_id  = tl.team_api_id
          WHERE api_id=$1 
