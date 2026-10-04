@@ -132,3 +132,35 @@ func findESPNTeam(name, short string, espnTeams []models.ESPNTeam) (models.ESPNT
 
 	return models.ESPNTeam{}, false
 }
+
+type ESPNRosterTarget struct {
+	ESPNTeamID int64
+	ESPNLeague string
+}
+
+// GetESPNTeamsForRosterSync lista cada time vinculado à ESPN uma vez, com o slug
+// de uma das ligas em que ele joga (ex: "bra.1")
+func GetESPNTeamsForRosterSync() ([]ESPNRosterTarget, error) {
+	rows, err := DB.Query(`
+		SELECT DISTINCT ON (t.espn_team_id) t.espn_team_id, l.code_espn
+		FROM teams t
+		JOIN team_leagues tl ON tl.team_api_id = t.api_id
+		JOIN leagues l ON l.code_api = tl.league
+		WHERE t.espn_team_id IS NOT NULL AND t.espn_team_id <> 0
+		  AND COALESCE(l.code_espn, '') <> ''
+		ORDER BY t.espn_team_id, tl.season DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var targets []ESPNRosterTarget
+	for rows.Next() {
+		var t ESPNRosterTarget
+		if err := rows.Scan(&t.ESPNTeamID, &t.ESPNLeague); err != nil {
+			return nil, err
+		}
+		targets = append(targets, t)
+	}
+	return targets, rows.Err()
+}

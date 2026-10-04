@@ -233,7 +233,7 @@ func GetLatestSeason(league string) string {
 	query := `SELECT season FROM matches WHERE league = $1 AND COALESCE(season, '') <> '' ORDER BY season DESC LIMIT 1`
 	err := DB.QueryRow(query, league).Scan(&season)
 	if err != nil {
-		return "2026"
+		return "" // Sem jogos: quem chama decide (services.ResolveSeason usa a temporada de hoje)
 	}
 	return season
 }

@@ -30,7 +30,8 @@ func Connect() {
 	// prepareThreshold é parâmetro do JDBC (Java): o lib/pq repassa ao servidor e um
 	// PostgreSQL comum recusa a conexão. binary_parameters é do lib/pq e evita prepared
 	// statements nomeados, necessário atrás do pooler do Supabase.
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&binary_parameters=yes",
+	// connect_timeout: sem ele, abrir conexão com o banco fora do ar espera para sempre
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&binary_parameters=yes&connect_timeout=5",
 		user, password, host, port, dbname)
 
 	db, err := sql.Open("postgres", connStr)

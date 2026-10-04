@@ -6,13 +6,20 @@ type ESPNScoreboard struct {
 		Logos []struct {
 			Href string `json:"href"`
 		} `json:"logos"`
+		Season struct {
+			Year        int    `json:"year"`
+			DisplayName string `json:"displayName"` // ex: "2026-27 UEFA Nations League"
+		} `json:"season"`
 	} `json:"leagues"`
 	Events []ESPNEvent `json:"events"`
 }
 
 type ESPNEvent struct {
-	ID           string            `json:"id"`
-	Date         string            `json:"date"`
+	ID     string `json:"id"`
+	Date   string `json:"date"`
+	Season struct {
+		Slug string `json:"slug"` // fase, ex: "league-phase"
+	} `json:"season"`
 	Competitions []ESPNCompetition `json:"competitions"`
 }
 

@@ -16,5 +16,8 @@ func GetAvailableSeasons(league string) ([]string, error) {
 		}
 		seasons = append(seasons, s)
 	}
+	if seasons == nil {
+		seasons = []string{}
+	}
 	return seasons, nil
 }

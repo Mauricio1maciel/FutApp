@@ -3,6 +3,8 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+
+	"github.com/lib/pq"
 )
 
 func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupDB, events []models.ESPNEventDB) error {
@@ -43,12 +45,15 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 			}
 			// Vincula à UNL (busca e detalhes exigem team_leagues). Usa o api_id do time
 			// dono do espn_team_id: seleções já cadastradas pela Copa mantêm o ID da football-data.
-			if _, err = tx.Exec(`
-                INSERT INTO team_leagues (team_api_id, league, season)
-                SELECT api_id, 'UNL', $2 FROM teams WHERE espn_team_id = $1 AND $2 <> ''
-                ON CONFLICT DO NOTHING`, t.id, match.Season); err != nil {
-				utils.CustomLog("DATABASE_ERRO", "Falha ao vincular time %d à UNL: %v", t.id, err)
-				return err
+			// $2 com tipo explícito: usado sem cast, o Postgres não consegue deduzir o tipo
+			if match.Season != "" {
+				if _, err = tx.Exec(`
+                    INSERT INTO team_leagues (team_api_id, league, season)
+                    SELECT api_id, 'UNL', $2::varchar FROM teams WHERE espn_team_id = $1
+                    ON CONFLICT DO NOTHING`, t.id, match.Season); err != nil {
+					utils.CustomLog("DATABASE_ERRO", "Falha ao vincular time %d à UNL: %v", t.id, err)
+					return err
+				}
 			}
 		}
 	}
@@ -89,9 +94,12 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 			return err
 		}
 	}
-	if _, err = tx.Exec(`DELETE FROM espn_match_events WHERE espn_match_id = $1::BIGINT`, match.MatchID); err != nil {
-		utils.CustomLog("DATABASE_ERRO", "Falha ao limpar eventos: %v", err)
-		return err
+	// Sem escalação e sem eventos = gravação só do básico (dados do scoreboard): mantém os eventos
+	if len(lineups) > 0 || len(events) > 0 {
+		if _, err = tx.Exec(`DELETE FROM espn_match_events WHERE espn_match_id = $1::BIGINT`, match.MatchID); err != nil {
+			utils.CustomLog("DATABASE_ERRO", "Falha ao limpar eventos: %v", err)
+			return err
+		}
 	}
 
 	for _, l := range lineups {
@@ -229,4 +237,34 @@ func GetFullMatchFromDB(matchID string) (*models.FullMatchHistory, error) {
 	}
 
 	return &history, nil
+}
+
+// GetCompleteESPNMatchIDs devolve quais desses jogos já estão encerrados e com
+// escalação no banco (não precisam buscar o summary de novo)
+func GetCompleteESPNMatchIDs(ids []int64) (map[string]bool, error) {
+	complete := make(map[string]bool)
+	if len(ids) == 0 {
+		return complete, nil
+	}
+
+	rows, err := DB.Query(`
+		SELECT e.espn_match_id::TEXT
+		FROM espn_matches e
+		WHERE e.espn_match_id = ANY($1)
+		  AND e.status = 'post'
+		  AND EXISTS (SELECT 1 FROM espn_match_lineups l WHERE l.espn_match_id = e.espn_match_id)`,
+		pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		complete[id] = true
+	}
+	return complete, rows.Err()
 }

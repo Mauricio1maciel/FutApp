@@ -1,5 +1,7 @@
 package models
 
+import "encoding/json"
+
 type MatchLineup struct {
 	MatchID      string `json:"match_id"`
 	ESPNTeamID   int    `json:"espn_team_id"`
@@ -64,6 +66,9 @@ type ESPNSummaryResponse struct {
 					Logos       []struct {
 						Href string `json:"href"`
 					} `json:"logos"`
+					// Grupo do time na competição (ex: {"name": "Group C1"}). RawMessage porque
+					// o formato varia entre ligas e um tipo errado derrubaria o parse inteiro
+					Groups json.RawMessage `json:"groups"`
 				} `json:"team"`
 			} `json:"competitors"`
 		} `json:"competitions"`

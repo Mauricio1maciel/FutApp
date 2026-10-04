@@ -8,9 +8,9 @@ func GetTeamPlayersBy(teamID int64, league string) ([]models.Player, error) {
             p.id, 
             p.api_id, 
             p.name, 
-            p.position, 
-            p.date_of_birth, 
-            p.nationality, 
+            COALESCE(p.position, ''), 
+            COALESCE(p.date_of_birth::TEXT, ''), 
+            COALESCE(p.nationality, ''), 
             p.team_id, 
             COALESCE(t.name, '') AS team_name, 
             p.league 

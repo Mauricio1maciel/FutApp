@@ -8,7 +8,40 @@ import (
 	"io"
 	"regexp"
 	"strconv"
+	"strings"
 )
+
+// Ex: "2026-27 UEFA Nations League" -> 2026 e 27
+var espnSeasonRe = regexp.MustCompile(`(\d{4})-(\d{2})`)
+
+// seasonFromESPN monta a temporada no padrão do banco: "2026" ou "2026-2027"
+func seasonFromESPN(year int, name string) string {
+	if m := espnSeasonRe.FindStringSubmatch(name); len(m) == 3 {
+		return fmt.Sprintf("%s-20%s", m[1], m[2])
+	}
+	return strconv.Itoa(year)
+}
+
+// groupFromCompetitors pega o grupo do jogo (ex: "Group C1") a partir do grupo de
+// cada time. O campo de grupo da própria competição no summary vem errado
+// (sempre "LEAGUE A - GROUP 1"), por isso não é usado.
+// Só aceita se os dois times estiverem no mesmo grupo.
+func groupFromCompetitors(teamGroups []json.RawMessage) string {
+	group := ""
+	for _, raw := range teamGroups {
+		var g struct {
+			Name string `json:"name"`
+		}
+		if len(raw) == 0 || json.Unmarshal(raw, &g) != nil || !strings.HasPrefix(strings.ToLower(g.Name), "group") {
+			return ""
+		}
+		if group != "" && g.Name != group {
+			return ""
+		}
+		group = g.Name
+	}
+	return group
+}
 
 func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatchDB, []models.ESPNLineupDB, []models.ESPNEventDB, error) {
 	espnLeague := getESPNLeague(leagueCode)
@@ -30,13 +63,7 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		return models.ESPNMatchDB{}, nil, nil, fmt.Errorf("erro unmarshal: %v", err)
 	}
 
-	seasonStr := strconv.Itoa(data.Header.Season.Year)
-
-	re := regexp.MustCompile(`(\d{4})-(\d{2})`)
-	matchesSeason := re.FindStringSubmatch(data.Header.Season.Name)
-	if len(matchesSeason) == 3 {
-		seasonStr = fmt.Sprintf("%s-20%s", matchesSeason[1], matchesSeason[2])
-	}
+	seasonStr := seasonFromESPN(data.Header.Season.Year, data.Header.Season.Name)
 
 	match := models.ESPNMatchDB{
 		MatchID: matchID,
@@ -50,6 +77,12 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		match.Status = comp.Status.Type.State
 
 		match.Stage = data.Header.Season.Slug
+
+		var teamGroups []json.RawMessage
+		for _, team := range comp.Competitors {
+			teamGroups = append(teamGroups, team.Team.Groups)
+		}
+		match.GroupName = groupFromCompetitors(teamGroups)
 
 		for _, team := range comp.Competitors {
 			teamID, _ := strconv.ParseInt(team.Team.ID, 10, 64)
@@ -69,43 +102,6 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 				match.AwayScore = team.Score
 				match.AwayTeam = teamName
 				match.AwayLogo = teamLogo
-			}
-		}
-	}
-
-	if match.GroupName == "" && len(match.MatchDate) >= 10 {
-		dateParam := match.MatchDate[0:4] + match.MatchDate[5:7] + match.MatchDate[8:10]
-		scoreUrl := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard?dates=%s", espnLeague, dateParam)
-
-		respScore, errScore := httpClient.Get(scoreUrl)
-		if errScore == nil {
-			defer respScore.Body.Close()
-			var scoreData struct {
-				Events []struct {
-					ID     string `json:"id"`
-					Season struct {
-						Slug string `json:"slug"`
-					} `json:"season"`
-					Competitions []struct {
-						Group struct {
-							Name string `json:"name"`
-						} `json:"group"`
-					} `json:"competitions"`
-				} `json:"events"`
-			}
-			if json.NewDecoder(respScore.Body).Decode(&scoreData) == nil {
-				for _, evt := range scoreData.Events {
-					if evt.ID == matchID {
-						if evt.Season.Slug != "" {
-							match.Stage = evt.Season.Slug
-						}
-						if len(evt.Competitions) > 0 && evt.Competitions[0].Group.Name != "" {
-							match.GroupName = evt.Competitions[0].Group.Name
-						}
-						utils.CustomLog("ESPN_API", "Grupo e Fase resgatados manualmente: %s - %s", match.GroupName, match.Stage)
-						break
-					}
-				}
 			}
 		}
 	}

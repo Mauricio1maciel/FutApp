@@ -36,5 +36,8 @@ func GetCalendarCounts(leagues []string, month string, year string) ([]CalendarD
 		}
 		days = append(days, c)
 	}
+	if days == nil {
+		days = []CalendarDay{}
+	}
 	return days, nil
 }
