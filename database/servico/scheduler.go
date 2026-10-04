@@ -1,7 +1,7 @@
 package servico
 
 import (
-	"App-Futebol/database"
+	"App-Futebol/services"
 	"App-Futebol/utils"
 	"log"
 	"time"
@@ -24,9 +24,7 @@ func StartBackgroundScheduler() {
 
 			utils.CustomLog("SCHEDULER", "Iniciando sincronização diária das 03:00...")
 
-			mapaTimesESPN := make(map[string]int64)
-
-			err := database.SyncCrossAPITeams(mapaTimesESPN)
+			_, err := services.SyncESPNTeamLinks()
 			if err != nil {
 				log.Printf("[ERRO] Falha na sincronização cruzada de times: %v", err)
 			} else {
