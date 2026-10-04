@@ -3,7 +3,7 @@ package handlers
 import (
 	"App-Futebol/database"
 	"App-Futebol/services"
-	"encoding/json"
+	"App-Futebol/utils"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -12,23 +12,21 @@ import (
 func TeamPlayersHandler(w http.ResponseWriter, r *http.Request) {
 	league := r.URL.Query().Get("league")
 	if league == "" {
-		http.Error(w, `{"error": "Parâmetro league é obrigatório"}`, http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Parâmetro league é obrigatório")
 		return
 	}
 
 	teamIDStr := r.URL.Query().Get("teamID")
 	if teamIDStr == "" {
-		http.Error(w, `{"error": "Parâmetro teamID é obrigatório"}`, http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Parâmetro teamID é obrigatório")
 		return
 	}
 
 	teamID, err := strconv.ParseInt(teamIDStr, 10, 64)
 	if err != nil {
-		http.Error(w, `{"error": "teamID inválido"}`, http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "teamID inválido")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
 
 	espnTeamID, err := database.GetESPNTeamID(teamID)
 	if err != nil {
@@ -41,15 +39,16 @@ func TeamPlayersHandler(w http.ResponseWriter, r *http.Request) {
 			espnPlayers, err := database.GetESPNPlayersByTeamID(int(espnTeamIDInt))
 
 			if err == nil && len(espnPlayers) > 0 {
-				json.NewEncoder(w).Encode(espnPlayers)
+				utils.WriteJSON(w, http.StatusOK, espnPlayers)
 				return
 			}
 		}
 	}
 
-	fallbackPlayers, err := services.GetTeamPlayersBy(teamID, league)
+	// Sem elenco da ESPN: usa o elenco da football-data já salvo no banco
+	fallbackPlayers, err := database.GetTeamPlayersBy(teamID, league)
 	if err != nil {
-		http.Error(w, `{"error": "Erro ao buscar elenco nas APIs"}`, http.StatusInternalServerError)
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar elenco")
 		return
 	}
 
@@ -57,7 +56,7 @@ func TeamPlayersHandler(w http.ResponseWriter, r *http.Request) {
 		fallbackPlayers[i].Source = "DATA"
 	}
 
-	json.NewEncoder(w).Encode(fallbackPlayers)
+	utils.WriteJSON(w, http.StatusOK, fallbackPlayers)
 }
 
 func SyncESPNTeamHandler(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +64,7 @@ func SyncESPNTeamHandler(w http.ResponseWriter, r *http.Request) {
 	leagueCode := r.URL.Query().Get("league")
 
 	if teamIDStr == "" || leagueCode == "" {
-		http.Error(w, `{"error": "Os parâmetros teamID e league são obrigatórios"}`, http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Os parâmetros teamID e league são obrigatórios")
 		return
 	}
 
@@ -73,7 +72,7 @@ func SyncESPNTeamHandler(w http.ResponseWriter, r *http.Request) {
 
 	espnTeamID, err := database.GetESPNTeamID(teamID)
 	if err != nil || espnTeamID == "" || espnTeamID == "0" {
-		http.Error(w, `{"error": "Este time não possui espn_team_id mapeado no banco"}`, http.StatusNotFound)
+		utils.WriteError(w, http.StatusNotFound, "Este time não possui espn_team_id mapeado no banco")
 		return
 	}
 
@@ -82,22 +81,17 @@ func SyncESPNTeamHandler(w http.ResponseWriter, r *http.Request) {
 	err = database.DB.QueryRow(query, leagueCode).Scan(&espnLeagueSlug)
 
 	if err != nil || espnLeagueSlug == "" {
-		http.Error(w, `{"error": "Esta liga não possui code_espn mapeado na tabela leagues"}`, http.StatusNotFound)
+		utils.WriteError(w, http.StatusNotFound, "Esta liga não possui code_espn mapeado na tabela leagues")
 		return
 	}
 
 	espnTeamIDInt, _ := strconv.ParseInt(espnTeamID, 10, 64)
 	err = services.SyncESPNRoster(espnLeagueSlug, int(espnTeamIDInt))
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": fmt.Sprintf("Falha ao baixar os jogadores da ESPN: %v", err),
-		})
+		utils.WriteError(w, http.StatusBadGateway, fmt.Sprintf("Falha ao baixar os jogadores da ESPN: %v", err))
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	utils.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"message":      "Elenco sincronizado com sucesso da ESPN!",
 		"team_api_id":  teamID,
 		"espn_team_id": espnTeamID,

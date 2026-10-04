@@ -3,6 +3,7 @@ package handlers
 import (
 	"App-Futebol/database"
 	"App-Futebol/services"
+	"App-Futebol/utils"
 	"log"
 	"net/http"
 )
@@ -15,7 +16,7 @@ func ForceSyncHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	missing, err := database.GetMissingMatches(league)
 	if err != nil {
 		log.Printf("Erro ao buscar jogos faltantes: %v", err)
-		http.Error(w, "Erro interno ao buscar dados", 500)
+		utils.WriteError(w, 500, "Erro interno ao buscar dados")
 		return
 	}
 	for _, m := range missing {
@@ -26,7 +27,8 @@ func ForceSyncHistoryHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status": "concluido", "message": "Sincronização de histórico finalizada"}`))
+	utils.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Sincronização de histórico finalizada",
+		"total":   len(missing),
+	})
 }

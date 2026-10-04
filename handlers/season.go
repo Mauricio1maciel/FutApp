@@ -2,23 +2,21 @@ package handlers
 
 import (
 	"App-Futebol/database"
-	"encoding/json"
+	"App-Futebol/utils"
 	"net/http"
 )
 
 func SeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	league := r.URL.Query().Get("league")
 	if league == "" {
-		http.Error(w, "Liga necessária", http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Liga necessária")
 		return
 	}
 
 	seasons, err := database.GetAvailableSeasons(league)
 	if err != nil {
-		http.Error(w, "Erro ao buscar temporadas", http.StatusInternalServerError)
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar temporadas")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(seasons)
+	utils.WriteJSON(w, http.StatusOK, seasons)
 }

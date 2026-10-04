@@ -2,27 +2,31 @@
 package middlewares
 
 import (
+	"App-Futebol/utils"
+	"context"
 	"crypto/subtle"
 	"net/http"
 	"os"
 )
 
-// AdminAuth exige o header X-Admin-Key igual à variável de ambiente ADMIN_KEY.
-// Sem ADMIN_KEY configurada, as rotas admin ficam bloqueadas.
+// AdminAuth libera a rota para:
+//   - um usuário admin logado (Authorization: Bearer <token do /auth/login>), ou
+//   - quem enviar o header X-Admin-Key igual à variável ADMIN_KEY (útil para curl/scripts).
 func AdminAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if claims, _ := claimsFromHeader(r); claims.IsAdmin() {
+			ctx := context.WithValue(r.Context(), claimsKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
 		adminKey := os.Getenv("ADMIN_KEY")
-		if adminKey == "" {
-			http.Error(w, `{"erro": "Rotas admin desabilitadas"}`, http.StatusServiceUnavailable)
-			return
-		}
-
 		providedKey := r.Header.Get("X-Admin-Key")
-		if subtle.ConstantTimeCompare([]byte(providedKey), []byte(adminKey)) != 1 {
-			http.Error(w, `{"erro": "Acesso negado"}`, http.StatusForbidden)
+		if adminKey != "" && subtle.ConstantTimeCompare([]byte(providedKey), []byte(adminKey)) == 1 {
+			next.ServeHTTP(w, r)
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		utils.WriteError(w, http.StatusForbidden, "Acesso restrito ao administrador")
 	}
 }

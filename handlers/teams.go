@@ -2,54 +2,39 @@ package handlers
 
 import (
 	"App-Futebol/database"
+	"App-Futebol/middlewares"
 	"App-Futebol/services"
-	"encoding/json"
+	"App-Futebol/utils"
 	"net/http"
-	"strconv"
-	"time"
 )
-
-func getSmartSeason(league string) string {
-	now := time.Now()
-	year := now.Year()
-	month := now.Month()
-
-	format := database.GetLeagueSeasonFormat(league)
-
-	if format == "calendar" {
-		return strconv.Itoa(year)
-	}
-
-	if month >= time.July {
-		return strconv.Itoa(year) + "-" + strconv.Itoa(year+1)
-	}
-	return strconv.Itoa(year-1) + "-" + strconv.Itoa(year)
-}
 
 func TeamsHandler(w http.ResponseWriter, r *http.Request) {
 	league := r.URL.Query().Get("league")
 	season := r.URL.Query().Get("season")
-	update := r.URL.Query().Get("update")
+	// Times vêm do banco (o worker sincroniza diariamente); só o admin força a football-data
+	forceUpdate := r.URL.Query().Get("update") == "true" && middlewares.IsAdmin(r)
 
 	if league == "" {
-		http.Error(w, `{"error": "Informe a league"}`, http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Informe a league")
 		return
 	}
 
 	if season == "" {
-		season = getSmartSeason(league)
+		season = services.CurrentSeason(league)
 	}
-	if update != "true" {
+	if !forceUpdate {
 		teams, err := database.GetTeamsByLeague(league)
-		if err == nil && len(teams) > 0 {
-			json.NewEncoder(w).Encode(teams)
+		if err != nil {
+			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar times")
 			return
 		}
+		utils.WriteJSON(w, http.StatusOK, teams)
+		return
 	}
 
 	teams, err := services.GetTeams(league)
 	if err != nil {
-		http.Error(w, `{"error": "Erro ao buscar times na API"}`, http.StatusInternalServerError)
+		utils.WriteError(w, http.StatusBadGateway, "Erro ao buscar times na football-data")
 		return
 	}
 
@@ -68,12 +53,12 @@ func TeamsHandler(w http.ResponseWriter, r *http.Request) {
 			savedCount++
 		}
 	}
+	utils.CustomLog("API", "Admin atualizou %d times da liga %s", savedCount, league)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Times atualizados com sucesso!",
-		"league":  league,
-		"season":  season,
-		"count":   savedCount,
-	})
+	updated, err := database.GetTeamsByLeague(league)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar times")
+		return
+	}
+	utils.WriteJSON(w, http.StatusOK, updated)
 }

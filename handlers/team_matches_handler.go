@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"App-Futebol/database"
-	"encoding/json"
+	"App-Futebol/utils"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,12 +13,12 @@ func TeamMatchesHandler(w http.ResponseWriter, r *http.Request) {
 	roundsStr := r.URL.Query().Get("rounds")
 
 	if teamIDStr == "" {
-		http.Error(w, `{"error": "O parâmetro 'id' é obrigatório"}`, http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "O parâmetro 'id' é obrigatório")
 		return
 	}
 	teamID, err := strconv.Atoi(teamIDStr)
 	if err != nil {
-		http.Error(w, `{"error": "O 'id' deve ser um número válido"}`, http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "O 'id' deve ser um número válido")
 		return
 	}
 
@@ -35,7 +35,7 @@ func TeamMatchesHandler(w http.ResponseWriter, r *http.Request) {
 		for _, r := range strings.Split(roundsStr, ",") {
 			round, err := strconv.ParseInt(strings.TrimSpace(r), 10, 64)
 			if err != nil {
-				http.Error(w, `{"error": "O parâmetro 'rounds' deve conter apenas números separados por vírgula"}`, http.StatusBadRequest)
+				utils.WriteError(w, http.StatusBadRequest, "O parâmetro 'rounds' deve conter apenas números separados por vírgula")
 				return
 			}
 			rounds = append(rounds, round)
@@ -44,10 +44,8 @@ func TeamMatchesHandler(w http.ResponseWriter, r *http.Request) {
 
 	matches, err := database.GetMatchesByTeamID(int64(teamID), rounds)
 	if err != nil {
-		http.Error(w, `{"error": "Erro ao buscar jogos do time"}`, http.StatusInternalServerError)
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogos do time")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(matches)
+	utils.WriteJSON(w, http.StatusOK, matches)
 }

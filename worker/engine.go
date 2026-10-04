@@ -13,6 +13,8 @@ var lastScoreboardSync = make(map[string]time.Time) // 🔥 Controla quando lemo
 func StartEngine() {
 	log.Println("[WORKER_BUSCA_ESCALACAO] Motor de Background Iniciado! Executando primeira varredura...")
 
+	startDataJobs()
+
 	processMatches()
 
 	ticker := time.NewTicker(1 * time.Minute)

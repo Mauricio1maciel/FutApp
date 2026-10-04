@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"App-Futebol/database"
-	"encoding/json"
+	"App-Futebol/utils"
 	"net/http"
 	"strings"
 )
@@ -13,17 +13,15 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 	year := r.URL.Query().Get("year")
 
 	if leaguesParam == "" || month == "" || year == "" {
-		http.Error(w, `{"error": "Faltam parâmetros: leagues, month, year"}`, http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Faltam parâmetros: leagues, month, year")
 		return
 	}
 
 	leagues := strings.Split(leaguesParam, ",")
 	counts, err := database.GetCalendarCounts(leagues, month, year)
 	if err != nil {
-		http.Error(w, `{"error": "Erro ao buscar calendário"}`, http.StatusInternalServerError)
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar calendário")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(counts)
+	utils.WriteJSON(w, http.StatusOK, counts)
 }

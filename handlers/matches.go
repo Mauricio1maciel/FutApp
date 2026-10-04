@@ -2,64 +2,13 @@ package handlers
 
 import (
 	"App-Futebol/database"
+	"App-Futebol/middlewares"
 	"App-Futebol/services"
 	"App-Futebol/utils"
-	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
-	"sync"
-	"time"
 )
-
-var lastReset time.Time
-var requestCount int
-var rateLimitMu sync.Mutex
-
-func canUpdate(force bool) bool {
-	rateLimitMu.Lock()
-	defer rateLimitMu.Unlock()
-
-	now := time.Now()
-
-	if now.Sub(lastReset) > time.Minute {
-		requestCount = 0
-		lastReset = now
-	}
-
-	limit := 3
-	if force {
-		limit = 8
-	}
-
-	if requestCount >= limit {
-		return false
-	}
-
-	requestCount++
-	return true
-}
-
-func getSeasonFromDate(dateStr string, league string) string {
-	t, err := time.Parse(time.RFC3339, dateStr)
-	if err != nil {
-		t = time.Now()
-	}
-
-	year := t.Year()
-	month := t.Month()
-
-	format := database.GetLeagueSeasonFormat(league)
-
-	if format == "calendar" {
-		return strconv.Itoa(year)
-	}
-
-	if month >= time.July {
-		return strconv.Itoa(year) + "-" + strconv.Itoa(year+1)
-	}
-	return strconv.Itoa(year-1) + "-" + strconv.Itoa(year)
-}
 
 func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -67,15 +16,21 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 	roundStr := r.URL.Query().Get("round")
 	dateStr := r.URL.Query().Get("date")
 	season := r.URL.Query().Get("season")
-	forceUpdate := r.URL.Query().Get("update") == "true"
+	// Só o admin pode forçar a busca na football-data; para os demais, o worker mantém o banco atualizado
+	forceUpdate := r.URL.Query().Get("update") == "true" && middlewares.IsAdmin(r)
 
 	if league == "" {
-		http.Error(w, "Informe a liga (ex: BSA, PL, PD)", http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Informe a liga (ex: BSA, PL, PD)")
 		return
 	}
-	if season == "" {
-		season = database.GetLatestSeason(league)
+	if forceUpdate {
+		utils.CustomLog("API", "Admin forçou atualização dos jogos: %s", league)
+		if err := services.SyncFootballDataMatches(league); err != nil {
+			log.Printf("Erro ao atualizar jogos na football-data: %v", err)
+		}
 	}
+
+	season = services.ResolveSeason(league, season)
 
 	isCurrentRound := false
 
@@ -94,62 +49,11 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		isCurrentRound = true
 	}
 
-	if canUpdate(forceUpdate) {
-		utils.CustomLog("API", "Atualizando dados da API em segundo plano: %s", league)
-
-		go func(lg string) {
-			apiMatches, err := services.GetMatchesByLeagueCode(lg)
-			if err != nil {
-				log.Println("❌ Erro ao buscar API:", err)
-				return
-			}
-
-			for _, m := range apiMatches {
-				homeScore, awayScore := 0, 0
-				var homePen, awayPen *int
-				if m.Score.FullTime.Home != nil {
-					homeScore = *m.Score.FullTime.Home
-				}
-				if m.Score.FullTime.Away != nil {
-					awayScore = *m.Score.FullTime.Away
-				}
-
-				if m.Score.Penalties.Home != nil && m.Score.Penalties.Away != nil {
-					hP := *m.Score.Penalties.Home
-					aP := *m.Score.Penalties.Away
-
-					homePen = &hP
-					awayPen = &aP
-
-					homeScore = homeScore - hP
-					awayScore = awayScore - aP
-				}
-
-				database.SaveMatch(
-					int64(m.ID), lg,
-					getSeasonFromDate(m.UTCDate, lg),
-					m.Matchday,
-					int64(m.HomeTeam.ID), int64(m.AwayTeam.ID),
-					homeScore, awayScore,
-					homePen, awayPen,
-					m.UTCDate, m.Status,
-					m.Stage, m.Group,
-					m.Score.Winner,
-				)
-			}
-			utils.CustomLog("API", "Atualização em segundo plano concluída para: %s", lg)
-		}(league)
-	} else {
-		utils.CustomLog("RATE_LIMIT", "⏱ Limite de requisições atingido (%s)", league)
-	}
-
 	matches, err := database.GetMatchesByLeague(league, roundStr, dateStr, season, isCurrentRound)
 	if err != nil {
 		log.Printf("Erro ao buscar jogos no banco: %v", err)
-		http.Error(w, "Erro ao buscar jogos", http.StatusInternalServerError)
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogos")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(matches)
+	utils.WriteJSON(w, http.StatusOK, matches)
 }

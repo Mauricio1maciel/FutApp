@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"App-Futebol/database"
-	"encoding/json"
+	"App-Futebol/utils"
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 )
@@ -12,35 +14,41 @@ func DetailsHandler(w http.ResponseWriter, r *http.Request) {
 	entityType := r.URL.Query().Get("type")
 
 	if apiIDStr == "" || entityType == "" {
-		http.Error(w, "Informe api_id e type (team ou player) na URL.", http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Informe api_id e type (team ou player) na URL.")
 		return
 	}
 	apiID, err := strconv.ParseInt(apiIDStr, 10, 64)
 	if err != nil {
-		http.Error(w, "api_id inválido. Deve ser um número.", http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "api_id inválido. Deve ser um número.")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
 	if entityType == "team" || entityType == "teams" {
 		team, err := database.GetTeamByApiID(apiID)
-		if err != nil {
-			http.Error(w, "Erro ao buscar time", http.StatusInternalServerError)
+		if errors.Is(err, sql.ErrNoRows) {
+			utils.WriteError(w, http.StatusNotFound, "Time não encontrado")
 			return
 		}
-		json.NewEncoder(w).Encode(team)
+		if err != nil {
+			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar time")
+			return
+		}
+		utils.WriteJSON(w, http.StatusOK, team)
 		return
 
-	} else if entityType == "players" {
+	} else if entityType == "player" || entityType == "players" {
 		player, err := database.GetPlayerByApiID(apiID)
-		if err != nil {
-			http.Error(w, "Erro ao buscar jogador", http.StatusInternalServerError)
+		if errors.Is(err, sql.ErrNoRows) {
+			utils.WriteError(w, http.StatusNotFound, "Jogador não encontrado")
 			return
 		}
-		json.NewEncoder(w).Encode(player)
+		if err != nil {
+			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogador")
+			return
+		}
+		utils.WriteJSON(w, http.StatusOK, player)
 		return
 
 	} else {
-		http.Error(w, "Tipo inválido. Use type=team ou type=player.", http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Tipo inválido. Use type=team ou type=player.")
 	}
 }

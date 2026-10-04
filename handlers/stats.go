@@ -2,27 +2,28 @@ package handlers
 
 import (
 	"App-Futebol/database"
+	"App-Futebol/middlewares"
 	"App-Futebol/models"
 	"App-Futebol/services"
-	"encoding/json"
+	"App-Futebol/utils"
 	"net/http"
 )
 
+// LeagueStatsHandler só lê do banco. O worker sincroniza as estatísticas da ESPN
+// a cada 6h; o admin pode forçar com update=true.
 func LeagueStatsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	league := r.URL.Query().Get("league")
 	season := r.URL.Query().Get("season")
+	forceUpdate := r.URL.Query().Get("update") == "true" && middlewares.IsAdmin(r)
 
 	if league == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Liga não informada"})
+		utils.WriteError(w, http.StatusBadRequest, "Liga não informada")
 		return
 	}
-	if season == "" {
-		season = database.GetLatestSeason(league)
-		if season == "" {
-			season = getSeasonByLeague(league)
-		}
+	season = services.ResolveSeason(league, season)
+
+	if forceUpdate {
+		services.SyncLeagueStatsBackground(league, season)
 	}
 
 	scorers, _ := database.GetTopStats(league, season, "goals")
@@ -40,7 +41,5 @@ func LeagueStatsHandler(w http.ResponseWriter, r *http.Request) {
 		TopAssists: assists,
 	}
 
-	json.NewEncoder(w).Encode(response)
-
-	go services.SyncLeagueStatsBackground(league, season)
+	utils.WriteJSON(w, http.StatusOK, response)
 }

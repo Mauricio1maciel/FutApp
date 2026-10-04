@@ -2,6 +2,7 @@
 package utils
 
 import (
+	"App-Futebol/models"
 	"errors"
 	"fmt"
 	"os"
@@ -18,20 +19,32 @@ func getSecretKey() []byte {
 
 // Claims define o que vai "escrito" dentro do token
 type Claims struct {
-	DeviceID string `json:"device_id"`
+	DeviceID string `json:"device_id,omitempty"`
+	UserID   int64  `json:"user_id,omitempty"`
+	Role     string `json:"role,omitempty"` // vazio em tokens antigos = convidado
 	jwt.RegisteredClaims
 }
 
-// GenerateToken cria um novo token válido por 30 dias
-func GenerateToken(deviceID string) (string, error) {
-	expirationTime := time.Now().Add(30 * 24 * time.Hour)
+func (c *Claims) IsAdmin() bool {
+	return c != nil && c.Role == models.RoleAdmin
+}
 
-	claims := &Claims{
-		DeviceID: deviceID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
+// GenerateToken cria um token de convidado (por aparelho) válido por 30 dias
+func GenerateToken(deviceID string) (string, error) {
+	return signClaims(&Claims{DeviceID: deviceID, Role: models.RoleGuest}, 30*24*time.Hour)
+}
+
+// GenerateUserToken cria o token de quem fez login. Dura menos que o de convidado
+// porque pode carregar o papel de admin.
+func GenerateUserToken(userID int64, role string) (string, error) {
+	return signClaims(&Claims{UserID: userID, Role: role}, 7*24*time.Hour)
+}
+
+func signClaims(claims *Claims, duration time.Duration) (string, error) {
+	now := time.Now()
+	claims.RegisteredClaims = jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(now.Add(duration)),
+		IssuedAt:  jwt.NewNumericDate(now),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

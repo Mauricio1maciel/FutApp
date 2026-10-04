@@ -8,5 +8,5 @@ type Team struct {
 	TLA     string `json:"tla"`
 	League  string `json:"league"`
 	Stadium string `json:"stadium"`
-	Crest   string `json:"crestUrl"`
+	Crest   string `json:"crest_url"`
 }

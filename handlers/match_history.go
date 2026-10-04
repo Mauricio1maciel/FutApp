@@ -2,23 +2,23 @@ package handlers
 
 import (
 	"App-Futebol/database"
+	"App-Futebol/middlewares"
 	"App-Futebol/services"
 	"App-Futebol/utils"
-	"encoding/json"
 	"log"
 	"net/http"
 )
 
 func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 
 	matchID := r.URL.Query().Get("id")
 	league := r.URL.Query().Get("league")
-	forceUpdate := r.URL.Query().Get("force_update") == "true"
+	// Buscar na ESPN durante a requisição é exclusivo do admin; o worker cuida do resto
+	isAdmin := middlewares.IsAdmin(r)
+	forceUpdate := r.URL.Query().Get("force_update") == "true" && isAdmin
 
 	if matchID == "" || league == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Informe o id e a league na URL"})
+		utils.WriteError(w, http.StatusBadRequest, "Informe o id e a league na URL")
 		return
 	}
 
@@ -33,7 +33,7 @@ func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		historyDB, _ := database.GetFullMatchFromDB(matchID)
-		json.NewEncoder(w).Encode(historyDB)
+		utils.WriteJSON(w, http.StatusOK, historyDB)
 		return
 	}
 
@@ -42,21 +42,29 @@ func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if hasLineups {
 		utils.CustomLog("DATABASE", "Cache encontrado! Devolvendo JSON em milissegundos para o jogo %s", matchID)
-		json.NewEncoder(w).Encode(historyDB)
+		utils.WriteJSON(w, http.StatusOK, historyDB)
 		return
 	}
 
-	utils.CustomLog("ESPN", "Sem escalação no DB. Buscando dados frescos na ESPN para o jogo %s...", matchID)
+	if !isAdmin {
+		if historyDB != nil {
+			utils.WriteJSON(w, http.StatusOK, historyDB)
+			return
+		}
+		utils.WriteError(w, http.StatusNotFound, "Jogo não disponível")
+		return
+	}
+
+	utils.CustomLog("ESPN", "Sem escalação no DB. Admin buscando dados frescos na ESPN para o jogo %s...", matchID)
 	match, lineups, events, err := services.FetchAndParseESPNMatch(matchID, league)
 
 	if err != nil {
 		log.Printf("[ERRO ESPN FALLBACK] %v", err)
 		if historyDB != nil {
-			json.NewEncoder(w).Encode(historyDB)
+			utils.WriteJSON(w, http.StatusOK, historyDB)
 			return
 		}
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Jogo não disponível"})
+		utils.WriteError(w, http.StatusNotFound, "Jogo não disponível")
 		return
 	}
 
@@ -68,7 +76,7 @@ func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	fullHistory, errFetch := database.GetFullMatchFromDB(matchID)
 
 	if errFetch == nil && fullHistory != nil {
-		json.NewEncoder(w).Encode(fullHistory)
+		utils.WriteJSON(w, http.StatusOK, fullHistory)
 	} else {
 		response := struct {
 			Match   interface{} `json:"match"`
@@ -79,6 +87,6 @@ func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
 			Lineups: lineups,
 			Events:  events,
 		}
-		json.NewEncoder(w).Encode(response)
+		utils.WriteJSON(w, http.StatusOK, response)
 	}
 }

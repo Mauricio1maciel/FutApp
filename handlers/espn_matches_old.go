@@ -3,7 +3,7 @@ package handlers
 import (
 	"App-Futebol/database"
 	"App-Futebol/services"
-	"encoding/json"
+	"App-Futebol/utils"
 	"net/http"
 	"strconv"
 )
@@ -15,7 +15,7 @@ func SyncPastMatchHandler(w http.ResponseWriter, r *http.Request) {
 	awayIDStr := r.URL.Query().Get("espn_away_team_id")
 
 	if league == "" || date == "" || homeIDStr == "" || awayIDStr == "" {
-		http.Error(w, `{"error": "Parâmetros incompletos"}`, http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Parâmetros incompletos")
 		return
 	}
 
@@ -24,25 +24,23 @@ func SyncPastMatchHandler(w http.ResponseWriter, r *http.Request) {
 
 	espnMatchID, err := services.FindESPNMatchID(league, date, homeID, awayID)
 	if err != nil || espnMatchID == "" {
-		http.Error(w, `{"error": "Jogo não encontrado na ESPN para esta data"}`, http.StatusNotFound)
+		utils.WriteError(w, http.StatusNotFound, "Jogo não encontrado na ESPN para esta data")
 		return
 	}
 	match, lineups, events, err := services.FetchAndParseESPNMatch(espnMatchID, league)
 	if err != nil {
-		http.Error(w, `{"error": "Falha ao baixar detalhes da ESPN"}`, http.StatusInternalServerError)
+		utils.WriteError(w, http.StatusInternalServerError, "Falha ao baixar detalhes da ESPN")
 		return
 	}
 	err = database.SaveFullMatchHistoryold(match, lineups, events)
 	if err != nil {
-		http.Error(w, `{"error": "Falha ao persistir dados no banco"}`, http.StatusInternalServerError)
+		utils.WriteError(w, http.StatusInternalServerError, "Falha ao persistir dados no banco")
 		return
 	}
 	fullData, err := database.GetFullMatchFromDB(espnMatchID)
 	if err != nil {
-		http.Error(w, `{"error": "Erro ao resgatar dados salvos"}`, http.StatusInternalServerError)
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao resgatar dados salvos")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(fullData)
+	utils.WriteJSON(w, http.StatusOK, fullData)
 }

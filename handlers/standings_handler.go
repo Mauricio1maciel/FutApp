@@ -2,141 +2,40 @@ package handlers
 
 import (
 	"App-Futebol/database"
-	"App-Futebol/models"
+	"App-Futebol/middlewares"
 	"App-Futebol/services"
 	"App-Futebol/utils"
-	"encoding/json"
 	"net/http"
-	"strconv"
-	"sync"
-	"time"
 )
 
-func getSeasonByLeague(league string) string {
-	t := time.Now()
-
-	year := t.Year()
-	month := t.Month()
-
-	format := database.GetLeagueSeasonFormat(league)
-
-	if format == "calendar" {
-		return strconv.Itoa(year)
-	}
-
-	if month >= time.July {
-		return strconv.Itoa(year) + "-" + strconv.Itoa(year+1)
-	}
-	return strconv.Itoa(year-1) + "-" + strconv.Itoa(year)
-}
-
-var lastStandingsUpdate = make(map[string]time.Time)
-var lastStandingsUpdateMu sync.Mutex
-
-func canUpdateStandingsBackground(league string) bool {
-	lastStandingsUpdateMu.Lock()
-	defer lastStandingsUpdateMu.Unlock()
-
-	now := time.Now()
-	last, exists := lastStandingsUpdate[league]
-
-	if !exists || now.Sub(last) > 15*time.Minute {
-		lastStandingsUpdate[league] = now
-		return true
-	}
-	return false
-}
-
+// StandingsHandler só lê a classificação do banco. O worker recalcula depois de cada
+// sincronização de jogos; o admin pode forçar com update=true.
 func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 	league := r.URL.Query().Get("league")
 	season := r.URL.Query().Get("season")
-	forceUpdate := r.URL.Query().Get("update") == "true"
+	forceUpdate := r.URL.Query().Get("update") == "true" && middlewares.IsAdmin(r)
 
 	if league == "" {
-		http.Error(w, "Informe a liga", http.StatusBadRequest)
+		utils.WriteError(w, http.StatusBadRequest, "Informe a liga")
 		return
 	}
 
-	if season == "" {
-		season = database.GetLatestSeason(league)
-		if season == "" {
-			season = getSeasonByLeague(league)
+	season = services.ResolveSeason(league, season)
+
+	result, err := database.GetStandingsByLeague(league, season)
+
+	// Recalcula se o admin pediu ou se a tabela ainda não existe (usa só o banco)
+	if forceUpdate || (err == nil && len(result) == 0) {
+		utils.CustomLog("API", "Calculando classificação: %s %s (admin=%v)", league, season, forceUpdate)
+		if err := services.RecalculateStandings(league, season); err != nil {
+			utils.CustomLog("DATABASE_ERRO", "Falha ao calcular classificação de %s: %v", league, err)
 		}
+		result, err = database.GetStandingsByLeague(league, season)
 	}
 
-	if !forceUpdate {
-		result, err := database.GetStandingsByLeague(league, season)
-
-		if err == nil && len(result) > 0 {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(result)
-
-			go processStandingsInBackground(league, season)
-			return
-		}
-	}
-
-	utils.CustomLog("API", "Tabela vazia ou atualização forçada. Calculando: %s", league)
-	forceCalculateAndSaveStandings(league, season)
-
-	result, _ := database.GetStandingsByLeague(league, season)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-func processStandingsInBackground(league, season string) {
-	if database.IsLeagueFinished(league) {
-		utils.CustomLog("API", "Liga %s finalizada. Poupando CPU.", league)
-		return
-	}
-
-	if !canUpdateStandingsBackground(league) {
-		return
-	}
-
-	utils.CustomLog("API", "Atualizando tabela no fundo (Goroutine): %s", league)
-	forceCalculateAndSaveStandings(league, season)
-}
-
-func forceCalculateAndSaveStandings(league, season string) {
-	matches, err := database.GetMatchesByLeague(league, "", "", season, false)
 	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar classificação")
 		return
 	}
-
-	winners, _ := database.GetWinnersBySeasonAndSeason(league, season)
-	rule, _ := database.GetCompetitionRule(league, season)
-	zones, _ := database.GetZonesByLeague(league)
-	criteria, _ := database.GetTieBreakers(league, season)
-
-	var standings []models.Standing
-
-	if league == "WC" {
-		standings = services.BuildCupStandings(matches, criteria)
-	} else if league == "UNL" {
-		standings = services.BuildUNLStandings(matches, criteria)
-	} else {
-		// Jogos com time fora da tabela teams (ex: IDs da ESPN gravados por engano)
-		// criariam times fantasmas e deslocariam a zona de rebaixamento
-		validMatches := make([]models.Match, 0, len(matches))
-		for _, m := range matches {
-			if m.HomeTeam == "" || m.AwayTeam == "" {
-				// ID 0 = confronto de mata-mata ainda indefinido, não é erro
-				if m.APIHomeTeamID != 0 && m.APIAwayTeamID != 0 {
-					utils.CustomLog("DATABASE_ERRO", "Jogo %s ignorado na classificação de %s: time desconhecido (%d x %d)", m.IDEvent, league, m.APIHomeTeamID, m.APIAwayTeamID)
-				}
-				continue
-			}
-			validMatches = append(validMatches, m)
-		}
-		standings = services.BuildStandings(validMatches, winners, rule, zones, criteria)
-	}
-
-	for i := range standings {
-		standings[i].Season = season
-	}
-
-	if err := database.ReplaceStandings(league, season, standings); err != nil {
-		utils.CustomLog("DATABASE_ERRO", "Falha ao salvar classificação de %s: %v", league, err)
-	}
+	utils.WriteJSON(w, http.StatusOK, result)
 }
