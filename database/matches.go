@@ -144,6 +144,7 @@ func SaveMatch(
          home_penalty = EXCLUDED.home_penalty, 
          away_penalty = EXCLUDED.away_penalty,
          match_date = EXCLUDED.match_date,
+         season = EXCLUDED.season,
          status = EXCLUDED.status,
          round = EXCLUDED.round,
          api_home_team_id = EXCLUDED.api_home_team_id,

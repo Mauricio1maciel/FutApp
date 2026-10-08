@@ -83,7 +83,9 @@ func RecalculateStandings(league, season string) error {
 	var standings []models.Standing
 
 	if league == "WC" {
-		standings = BuildCupStandings(matches, criteria)
+		standings = BuildCupStandings(matches, criteria, WorldCupFormat)
+	} else if league == "CLI" {
+		standings = BuildCupStandings(matches, criteria, LibertadoresFormat)
 	} else if league == "UNL" {
 		standings = BuildUNLStandings(matches, criteria)
 	} else {

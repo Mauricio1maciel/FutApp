@@ -7,7 +7,22 @@ import (
 	"strings"
 )
 
-func BuildCupStandings(matches []models.Match, criteria []string) []models.Standing {
+// CupFormat diz quem avança de cada grupo de uma copa
+type CupFormat struct {
+	BestThirds int    // quantos terceiros colocados (os melhores entre todos os grupos) avançam
+	ThirdZone  string // zona dos demais terceiros colocados (vazio = "Eliminado")
+}
+
+var (
+	// Copa do Mundo de 48 seleções: 2 primeiros de cada grupo + 8 melhores terceiros
+	WorldCupFormat = CupFormat{BestThirds: 8}
+	// Libertadores: 2 primeiros às oitavas; o 3º cai para os playoffs da Sul-Americana
+	LibertadoresFormat = CupFormat{ThirdZone: "Sul-Americana"}
+)
+
+// BuildCupStandings monta a classificação da fase de grupos (stage GROUP_STAGE).
+// Jogos de fases preliminares e do mata-mata ficam de fora.
+func BuildCupStandings(matches []models.Match, criteria []string, format CupFormat) []models.Standing {
 	utils.CustomLog("COPA", "🔥 Iniciando cálculo da Copa! Total de jogos recebidos: %d", len(matches))
 	criteria = withDefaultCriteria(criteria)
 
@@ -63,7 +78,7 @@ func BuildCupStandings(matches []models.Match, criteria []string) []models.Stand
 
 	bestThirds := make(map[int64]bool)
 	for i, t := range thirdPlacedTeams {
-		if i < 8 {
+		if i < format.BestThirds {
 			bestThirds[t.TeamID] = true
 		}
 	}
@@ -77,6 +92,8 @@ func BuildCupStandings(matches []models.Match, criteria []string) []models.Stand
 				team.Zone = "Classificado - Oitavas"
 			} else if team.Position == 3 && bestThirds[team.TeamID] {
 				team.Zone = "Classificado - Melhor 3º"
+			} else if team.Position == 3 && format.ThirdZone != "" {
+				team.Zone = format.ThirdZone
 			} else {
 				team.Zone = "Eliminado"
 			}
