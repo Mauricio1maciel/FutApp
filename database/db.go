@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"time"
 
@@ -24,15 +26,31 @@ func Connect() {
 		log.Fatal("Variáveis de ambiente do banco não carregadas corretamente!")
 	}
 
-	// A URL deve ser montada exatamente assim:
-	// postgres://usuario:senha@host:port/dbname?params
-	// Ajuste a string de conexão para isto:
-	// prepareThreshold é parâmetro do JDBC (Java): o lib/pq repassa ao servidor e um
-	// PostgreSQL comum recusa a conexão. binary_parameters é do lib/pq e evita prepared
-	// statements nomeados, necessário atrás do pooler do Supabase.
-	// connect_timeout: sem ele, abrir conexão com o banco fora do ar espera para sempre
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&binary_parameters=yes&connect_timeout=5",
-		user, password, host, port, dbname)
+	// SSL ligado por padrão: sem ele a senha e os dados trafegam abertos até o Supabase.
+	// DB_SSLMODE=disable só para banco local (ex: Postgres no Docker).
+	sslmode := os.Getenv("DB_SSLMODE")
+	if sslmode == "" {
+		sslmode = "require"
+	}
+
+	// binary_parameters é do lib/pq e evita prepared statements nomeados, necessário
+	// atrás do pooler do Supabase. (prepareThreshold é do JDBC: um PostgreSQL comum
+	// recusa a conexão.) connect_timeout: sem ele, abrir conexão com o banco fora do
+	// ar espera para sempre.
+	params := url.Values{}
+	params.Set("sslmode", sslmode)
+	params.Set("binary_parameters", "yes")
+	params.Set("connect_timeout", "5")
+
+	// url.URL escapa usuário e senha: um "@" ou "/" na senha quebrava a string montada à mão
+	connURL := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(user, password),
+		Host:     net.JoinHostPort(host, port),
+		Path:     "/" + dbname,
+		RawQuery: params.Encode(),
+	}
+	connStr := connURL.String()
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -51,5 +69,5 @@ func Connect() {
 	db.SetConnMaxLifetime(5 * time.Minute) // Renova conexões para evitar erros de timeout
 
 	DB = db
-	fmt.Println("Banco conectado com sucesso e Pool configurado!")
+	fmt.Printf("Banco conectado com sucesso e Pool configurado! (sslmode=%s)\n", sslmode)
 }
