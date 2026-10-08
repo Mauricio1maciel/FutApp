@@ -62,7 +62,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /players` | `league` | lista de jogadores |
 | `GET /team/players` | `teamID`, `league` | lista de jogadores |
 | `GET /details` | `api_id`, `type=team\|player` | um time ou um jogador |
-| `GET /search` | `q` | `{"teams": [...], "players": [...]}` |
+| `GET /search` | `q` | `{"leagues": [...], "teams": [...], "players": [...]}` |
 
 ### Formatos
 
@@ -75,6 +75,15 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 ```
 Em copas e na Liga das Nações, `group_name` vem preenchido (ex: `"Group C1"`) e a
 lista vem ordenada por grupo e posição.
+
+**Liga** (`leagues` do `/search`, até 5, só ligas com jogos no banco):
+```json
+{ "code": "BSA", "name": "Brasileirão - Série A",
+  "logo_url": "https://...", "season": "2026" }
+```
+`code` é o valor do parâmetro `league` das outras rotas, e `season` é a temporada mais
+recente. A busca acha pelo nome, pelo código (`pl`, `bsa`) e por apelidos sem acento
+obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo").
 
 **Time:**
 ```json

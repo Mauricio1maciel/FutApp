@@ -15,6 +15,12 @@ func GlobalSearchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	leagues, err := database.SearchLeagues(query)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar ligas")
+		return
+	}
+
 	teams, err := database.SearchTeamsGlobal(query)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar times")
@@ -28,6 +34,7 @@ func GlobalSearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := models.SearchResult{
+		Leagues: leagues,
 		Teams:   teams,
 		Players: players,
 	}

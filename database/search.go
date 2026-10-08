@@ -5,6 +5,45 @@ import (
 	"App-Futebol/utils"
 )
 
+// SearchLeagues busca ligas pelo nome, pelo código (BSA, PL...) ou pelos apelidos
+// (search_terms). Só devolve ligas com jogos no banco: as outras abririam uma tela vazia.
+func SearchLeagues(query string) ([]models.League, error) {
+	rows, err := DB.Query(`
+        SELECT l.code_api, l.name, COALESCE(l.logo_url, ''), s.season
+        FROM leagues l
+        CROSS JOIN LATERAL (
+            SELECT season FROM matches
+            WHERE league = l.code_api AND COALESCE(season, '') <> ''
+            ORDER BY season DESC LIMIT 1
+        ) s
+        WHERE unaccent(l.name) ILIKE '%' || unaccent($1) || '%'
+           OR unaccent(l.search_terms) ILIKE '%' || unaccent($1) || '%'
+           OR l.code_api ILIKE $1
+        ORDER BY
+            CASE
+                WHEN l.code_api ILIKE $1 THEN 0
+                WHEN unaccent(l.name) ILIKE unaccent($1) || '%' THEN 1
+                ELSE 2
+            END,
+            l.name
+        LIMIT 5`, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	leagues := []models.League{}
+	for rows.Next() {
+		var l models.League
+		if err := rows.Scan(&l.Code, &l.Name, &l.LogoURL, &l.Season); err != nil {
+			utils.CustomLog("DB_ERRO", "Erro no Scan da busca de ligas: %v", err)
+			continue
+		}
+		leagues = append(leagues, l)
+	}
+	return leagues, rows.Err()
+}
+
 func SearchTeamsGlobal(query string) ([]models.Team, error) {
 	rows, err := DB.Query(
 		`SELECT 

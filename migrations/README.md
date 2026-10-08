@@ -36,6 +36,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 005_tabela_users | ✅ |
 | 006_ids_proprios_selecoes_unl | ✅ |
 | 007_corrige_temporadas_e_jogos_intrusos | ✅ |
+| 008_busca_de_ligas | ⏳ |
 
 ## Criando uma mudança nova
 
