@@ -18,14 +18,16 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 	defer tx.Rollback()
 
 	// 🔥 1. AUTO-REGISTO NA TABELA TEAMS (só UNL: a football-data não cobre a Liga das Nações,
-	// então as seleções são cadastradas com o próprio ID da ESPN como api_id).
+	// então as seleções são cadastradas com api_id = ESPNOnlyTeamIDOffset + ID da ESPN.
+	// Usar o ID da ESPN puro colidia com os IDs da football-data: o SaveTeam de um clube
+	// sobrescrevia a seleção (ex: Polônia virou Sassuolo).
 	// Nas outras ligas os times vêm da football-data e são vinculados pelo SyncESPNTeamLinks.
 	// ON CONFLICT sem alvo: ignora conflito em api_id E em espn_team_id (time já vinculado).
 	// Qualquer erro aqui aborta a transação no Postgres, por isso não pode ser ignorado.
 	if match.League == "UNL" {
 		teamQuery := `
             INSERT INTO teams (api_id, espn_team_id, name, crest_url)
-            VALUES ($1::BIGINT, $1::BIGINT, $2, $3)
+            VALUES ($4::BIGINT + $1::BIGINT, $1::BIGINT, $2, $3)
             ON CONFLICT DO NOTHING`
 
 		teams := []struct {
@@ -39,7 +41,7 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 			if t.id == 0 || t.name == "" {
 				continue // Time ainda indefinido (ex: mata-mata sem confronto)
 			}
-			if _, err = tx.Exec(teamQuery, t.id, t.name, t.logo); err != nil {
+			if _, err = tx.Exec(teamQuery, t.id, t.name, t.logo, ESPNOnlyTeamIDOffset); err != nil {
 				utils.CustomLog("DATABASE_ERRO", "Falha ao registrar time %d: %v", t.id, err)
 				return err
 			}

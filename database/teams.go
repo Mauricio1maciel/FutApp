@@ -58,6 +58,12 @@ func GetTeamsByLeague(league string) ([]models.Team, error) {
 
 	return teams, nil
 }
+
+// ESPNOnlyTeamIDOffset é a faixa de api_id dos times que só existem na ESPN (seleções
+// da UNL). Fica muito acima dos IDs da football-data, então os dois nunca colidem.
+// O trigger trg_sync_espn_to_matches usa o mesmo valor (migration 006).
+const ESPNOnlyTeamIDOffset int64 = 1_000_000_000
+
 func SaveTeam(apiID int64, name string, short string, tla string, league string, stadium string, crest string, season string) error {
 	_, err := DB.Exec(
 		`INSERT INTO teams (api_id, name, short, tla, stadium, crest_url) 
