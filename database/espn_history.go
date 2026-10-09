@@ -3,14 +3,18 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 
 	"github.com/lib/pq"
 )
 
-func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupDB, events []models.ESPNEventDB) error {
+func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups []models.ESPNLineupDB, events []models.ESPNEventDB) error {
+	ctx, cancel := withTxTimeout(ctx)
+	defer cancel()
+
 	utils.CustomLog("DATABASE", "Iniciando persistência da partida %s...", match.MatchID)
 
-	tx, err := DB.Begin()
+	tx, err := DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -41,7 +45,7 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 			if t.id == 0 || t.name == "" {
 				continue // Time ainda indefinido (ex: mata-mata sem confronto)
 			}
-			if _, err = tx.Exec(teamQuery, t.id, t.name, t.logo, ESPNOnlyTeamIDOffset); err != nil {
+			if _, err = tx.ExecContext(ctx, teamQuery, t.id, t.name, t.logo, ESPNOnlyTeamIDOffset); err != nil {
 				utils.CustomLog("DATABASE_ERRO", "Falha ao registrar time %d: %v", t.id, err)
 				return err
 			}
@@ -49,7 +53,7 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 			// dono do espn_team_id: seleções já cadastradas pela Copa mantêm o ID da football-data.
 			// $2 com tipo explícito: usado sem cast, o Postgres não consegue deduzir o tipo
 			if match.Season != "" {
-				if _, err = tx.Exec(`
+				if _, err = tx.ExecContext(ctx, `
                     INSERT INTO team_leagues (team_api_id, league, season)
                     SELECT api_id, 'UNL', $2::varchar FROM teams WHERE espn_team_id = $1
                     ON CONFLICT DO NOTHING`, t.id, match.Season); err != nil {
@@ -61,7 +65,7 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 	}
 
 	// 🔥 2. SALVAR NA ESPN_MATCHES (AGORA COM SEASON E 13 PARÂMETROS!)
-	_, err = tx.Exec(
+	_, err = tx.ExecContext(ctx,
 		`INSERT INTO espn_matches (espn_match_id, league, season, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name) 
          VALUES ($1::BIGINT, $2, $3, NULLIF($4, '')::TIMESTAMP, $5, $6::BIGINT, $7, $8::BIGINT, $9, $10, $11, $12, $13)
          ON CONFLICT (espn_match_id) DO UPDATE 
@@ -91,21 +95,21 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 
 	// Só substitui a escalação se a ESPN devolveu uma nova; resposta vazia não apaga a que já existe
 	if len(lineups) > 0 {
-		if _, err = tx.Exec(`DELETE FROM espn_match_lineups WHERE espn_match_id = $1::BIGINT`, match.MatchID); err != nil {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM espn_match_lineups WHERE espn_match_id = $1::BIGINT`, match.MatchID); err != nil {
 			utils.CustomLog("DATABASE_ERRO", "Falha ao limpar escalação: %v", err)
 			return err
 		}
 	}
 	// Sem escalação e sem eventos = gravação só do básico (dados do scoreboard): mantém os eventos
 	if len(lineups) > 0 || len(events) > 0 {
-		if _, err = tx.Exec(`DELETE FROM espn_match_events WHERE espn_match_id = $1::BIGINT`, match.MatchID); err != nil {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM espn_match_events WHERE espn_match_id = $1::BIGINT`, match.MatchID); err != nil {
 			utils.CustomLog("DATABASE_ERRO", "Falha ao limpar eventos: %v", err)
 			return err
 		}
 	}
 
 	for _, l := range lineups {
-		_, err = tx.Exec(
+		_, err = tx.ExecContext(ctx,
 			`INSERT INTO espn_match_lineups (espn_match_id, espn_team_id, espn_player_id, player_name, jersey, position, is_starter, formation)
              VALUES ($1::BIGINT, $2::BIGINT, $3::BIGINT, $4, $5, $6, $7, $8)`,
 			l.MatchID, l.ESPNTeamID, l.ESPNPlayerID, l.PlayerName, l.Jersey, l.Position, l.IsStarter, l.Formation,
@@ -118,7 +122,7 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 	}
 
 	for _, e := range events {
-		_, err = tx.Exec(
+		_, err = tx.ExecContext(ctx,
 			`INSERT INTO espn_match_events (espn_match_id, minute, event_type, espn_team_id, player_name, details)
              VALUES ($1::BIGINT, $2, $3, $4::BIGINT, $5, $6)`,
 			e.MatchID, e.Minute, e.EventType, e.ESPNTeamID, e.PlayerName, e.Details,
@@ -134,7 +138,10 @@ func SaveFullMatchHistory(match models.ESPNMatchDB, lineups []models.ESPNLineupD
 	return tx.Commit()
 }
 
-func GetFullMatchFromDB(matchID string) (*models.FullMatchHistory, error) {
+func GetFullMatchFromDB(ctx context.Context, matchID string) (*models.FullMatchHistory, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	var history models.FullMatchHistory
 
 	// 🔥 ADICIONADO O CAMPO e.season NO SELECT
@@ -164,7 +171,7 @@ func GetFullMatchFromDB(matchID string) (*models.FullMatchHistory, error) {
         LIMIT 1`
 
 	// 🔥 ADICIONADO O CAMPO &history.Match.Season NO SCAN
-	err := DB.QueryRow(query, matchID).Scan(
+	err := DB.QueryRowContext(ctx, query, matchID).Scan(
 		&history.Match.MatchID,
 		&history.Match.League,
 		&history.Match.Season,
@@ -189,7 +196,7 @@ func GetFullMatchFromDB(matchID string) (*models.FullMatchHistory, error) {
 		return nil, err
 	}
 
-	rowsLineups, err := DB.Query(
+	rowsLineups, err := DB.QueryContext(ctx,
 		`SELECT 
             l.espn_team_id::TEXT, 
             COALESCE(l.espn_player_id, 0), 
@@ -216,7 +223,7 @@ func GetFullMatchFromDB(matchID string) (*models.FullMatchHistory, error) {
 		}
 	}
 
-	rowsEvents, err := DB.Query(
+	rowsEvents, err := DB.QueryContext(ctx,
 		`SELECT minute, event_type, espn_team_id::TEXT, player_name, details 
          FROM espn_match_events WHERE espn_match_id::BIGINT = $1::BIGINT ORDER BY id ASC`, matchID)
 	if err == nil {
@@ -243,13 +250,16 @@ func GetFullMatchFromDB(matchID string) (*models.FullMatchHistory, error) {
 
 // GetCompleteESPNMatchIDs devolve quais desses jogos já estão encerrados e com
 // escalação no banco (não precisam buscar o summary de novo)
-func GetCompleteESPNMatchIDs(ids []int64) (map[string]bool, error) {
+func GetCompleteESPNMatchIDs(ctx context.Context, ids []int64) (map[string]bool, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	complete := make(map[string]bool)
 	if len(ids) == 0 {
 		return complete, nil
 	}
 
-	rows, err := DB.Query(`
+	rows, err := DB.QueryContext(ctx, `
 		SELECT e.espn_match_id::TEXT
 		FROM espn_matches e
 		WHERE e.espn_match_id = ANY($1)

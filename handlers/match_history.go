@@ -27,17 +27,17 @@ func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		match, lineups, events, err := services.FetchAndParseESPNMatch(matchID, league)
 
 		if err == nil {
-			database.SaveFullMatchHistory(match, lineups, events)
+			database.SaveFullMatchHistory(r.Context(), match, lineups, events)
 		} else {
 			log.Printf("[ERRO ESPN PULL TO REFRESH] %v", err)
 		}
 
-		historyDB, _ := database.GetFullMatchFromDB(matchID)
+		historyDB, _ := database.GetFullMatchFromDB(r.Context(), matchID)
 		utils.WriteJSON(w, http.StatusOK, historyDB)
 		return
 	}
 
-	historyDB, err := database.GetFullMatchFromDB(matchID)
+	historyDB, err := database.GetFullMatchFromDB(r.Context(), matchID)
 	hasLineups := err == nil && historyDB != nil && len(historyDB.Lineups) > 0
 
 	if hasLineups {
@@ -68,12 +68,12 @@ func MatchHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	errSave := database.SaveFullMatchHistory(match, lineups, events)
+	errSave := database.SaveFullMatchHistory(r.Context(), match, lineups, events)
 	if errSave != nil {
 		utils.CustomLog("DATABASE_ERRO", "Falha ao salvar: %v", errSave)
 	}
 
-	fullHistory, errFetch := database.GetFullMatchFromDB(matchID)
+	fullHistory, errFetch := database.GetFullMatchFromDB(r.Context(), matchID)
 
 	if errFetch == nil && fullHistory != nil {
 		utils.WriteJSON(w, http.StatusOK, fullHistory)

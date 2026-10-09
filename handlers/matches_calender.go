@@ -18,7 +18,7 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	leagues := strings.Split(leaguesParam, ",")
-	counts, err := database.GetCalendarCounts(leagues, month, year)
+	counts, err := database.GetCalendarCounts(r.Context(), leagues, month, year)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar calendário")
 		return

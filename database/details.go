@@ -3,13 +3,17 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 )
 
-func GetTeamByApiID(apiID int64) (models.Team, error) {
+func GetTeamByApiID(ctx context.Context, apiID int64) (models.Team, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	var t models.Team
 	utils.CustomLog("DB_INFO", "Iniciando busca de detalhes para o ID: %d", apiID)
 
-	err := DB.QueryRow(
+	err := DB.QueryRowContext(ctx,
 		`SELECT id, api_id, name, tl.league, COALESCE(stadium, ''), COALESCE(crest_url, '')
          FROM teams t
          join team_leagues tl on t.api_id  = tl.team_api_id
@@ -31,7 +35,10 @@ func GetTeamByApiID(apiID int64) (models.Team, error) {
 	return t, err
 }
 
-func GetPlayerByApiID(apiID int64) (models.Player, error) {
+func GetPlayerByApiID(ctx context.Context, apiID int64) (models.Player, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	utils.CustomLog("DB_INFO", "Iniciando busca de detalhes para o ID: %d", apiID)
 
 	sqlQuery := `
@@ -85,7 +92,7 @@ func GetPlayerByApiID(apiID int64) (models.Player, error) {
 
 	var p models.Player
 
-	err := DB.QueryRow(sqlQuery, apiID).Scan(
+	err := DB.QueryRowContext(ctx, sqlQuery, apiID).Scan(
 		&p.ID,
 		&p.ApiID,
 		&p.Name,

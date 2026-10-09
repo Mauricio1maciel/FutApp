@@ -2,6 +2,7 @@ package services
 
 import (
 	"App-Futebol/database"
+	"context"
 	"strconv"
 	"time"
 )
@@ -27,18 +28,18 @@ func SeasonFromDate(dateStr string, format string) string {
 }
 
 // CurrentSeason devolve a temporada de hoje no formato da liga
-func CurrentSeason(league string) string {
-	return SeasonFromDate(time.Now().Format(time.RFC3339), database.GetLeagueSeasonFormat(league))
+func CurrentSeason(ctx context.Context, league string) string {
+	return SeasonFromDate(time.Now().Format(time.RFC3339), database.GetLeagueSeasonFormat(ctx, league))
 }
 
 // ResolveSeason usa a temporada pedida; se vier vazia, a mais recente com jogos no banco;
 // se não houver jogos, a temporada de hoje
-func ResolveSeason(league string, season string) string {
+func ResolveSeason(ctx context.Context, league string, season string) string {
 	if season != "" {
 		return season
 	}
-	if latest := database.GetLatestSeason(league); latest != "" {
+	if latest := database.GetLatestSeason(ctx, league); latest != "" {
 		return latest
 	}
-	return CurrentSeason(league)
+	return CurrentSeason(ctx, league)
 }

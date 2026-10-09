@@ -23,7 +23,7 @@ func DetailsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if entityType == "team" || entityType == "teams" {
-		team, err := database.GetTeamByApiID(apiID)
+		team, err := database.GetTeamByApiID(r.Context(), apiID)
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.WriteError(w, http.StatusNotFound, "Time não encontrado")
 			return
@@ -36,7 +36,7 @@ func DetailsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 
 	} else if entityType == "player" || entityType == "players" {
-		player, err := database.GetPlayerByApiID(apiID)
+		player, err := database.GetPlayerByApiID(r.Context(), apiID)
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.WriteError(w, http.StatusNotFound, "Jogador não encontrado")
 			return

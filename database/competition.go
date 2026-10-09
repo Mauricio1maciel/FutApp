@@ -1,13 +1,18 @@
 package database
 
-import "App-Futebol/models"
+import (
+	"App-Futebol/models"
+	"context"
+)
 
-func GetCompetitionRule(league string, season string) (*models.CompetitionRule, error) {
+func GetCompetitionRule(ctx context.Context, league string, season string) (*models.CompetitionRule, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
 
 	var rule models.CompetitionRule
 
 	// Temporada sem regra cadastrada usa a mais recente anterior a ela
-	row := DB.QueryRow(`
+	row := DB.QueryRowContext(ctx, `
 		SELECT season, libertadores, pre_libertadores, sul_americana, rebaixamento
 		FROM competition_rules
 		WHERE league = $1 AND season <= $2
@@ -30,9 +35,11 @@ func GetCompetitionRule(league string, season string) (*models.CompetitionRule, 
 	return &rule, nil
 }
 
-func GetWinnersBySeasonAndSeason(league string, season string) ([]models.Winner, error) {
+func GetWinnersBySeasonAndSeason(ctx context.Context, league string, season string) ([]models.Winner, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
 
-	rows, err := DB.Query(`
+	rows, err := DB.QueryContext(ctx, `
 		SELECT competition, team_name
 		FROM competition_winners
 		WHERE league = $1 AND season = $2
@@ -60,10 +67,12 @@ func GetWinnersBySeasonAndSeason(league string, season string) ([]models.Winner,
 	return winners, nil
 }
 
-func GetTieBreakers(league string, season string) ([]string, error) {
+func GetTieBreakers(ctx context.Context, league string, season string) ([]string, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
 
 	// Temporada sem critérios cadastrados usa a mais recente anterior a ela
-	rows, err := DB.Query(`
+	rows, err := DB.QueryContext(ctx, `
 		SELECT criterion
 		FROM competition_tiebreakers
 		WHERE league = $1

@@ -3,12 +3,16 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 )
 
 // SearchLeagues busca ligas pelo nome, pelo código (BSA, PL...) ou pelos apelidos
 // (search_terms). Só devolve ligas com jogos no banco: as outras abririam uma tela vazia.
-func SearchLeagues(query string) ([]models.League, error) {
-	rows, err := DB.Query(`
+func SearchLeagues(ctx context.Context, query string) ([]models.League, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	rows, err := DB.QueryContext(ctx, `
         SELECT l.code_api, l.name, COALESCE(l.logo_url, ''), s.season
         FROM leagues l
         CROSS JOIN LATERAL (
@@ -44,8 +48,11 @@ func SearchLeagues(query string) ([]models.League, error) {
 	return leagues, rows.Err()
 }
 
-func SearchTeamsGlobal(query string) ([]models.Team, error) {
-	rows, err := DB.Query(
+func SearchTeamsGlobal(ctx context.Context, query string) ([]models.Team, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	rows, err := DB.QueryContext(ctx,
 		`SELECT 
             t.id, 
             t.api_id, 
@@ -82,7 +89,10 @@ func SearchTeamsGlobal(query string) ([]models.Team, error) {
 	return teams, nil
 }
 
-func SearchPlayersGlobal(query string) ([]models.Player, error) {
+func SearchPlayersGlobal(ctx context.Context, query string) ([]models.Player, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	sqlQuery := `
         WITH combined_results AS (
             SELECT 
@@ -139,7 +149,7 @@ func SearchPlayersGlobal(query string) ([]models.Player, error) {
         LIMIT 15
     `
 
-	rows, err := DB.Query(sqlQuery, query)
+	rows, err := DB.QueryContext(ctx, sqlQuery, query)
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Erro na query SearchPlayersGlobal: %v", err)
 		return nil, err

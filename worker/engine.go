@@ -3,6 +3,7 @@ package worker
 import (
 	"App-Futebol/database"
 	"App-Futebol/services"
+	"context"
 	"log"
 	"time"
 )
@@ -26,28 +27,30 @@ func StartEngine() {
 }
 
 // 🔥 Esta função resolve o Problema "Tostines" (O Ovo ou a Galinha)
-func syncScoreboards() {
-	activeLeagues := database.GetActiveLeaguesToday()
+func syncScoreboards(ctx context.Context) {
+	activeLeagues := database.GetActiveLeaguesToday(ctx)
 
 	for _, lg := range activeLeagues {
 		// Só puxa o scoreboard inteiro da liga a cada 2 horas para não gastar banda
 		if time.Since(lastScoreboardSync[lg]) > 2*time.Hour {
 			log.Printf("[WORKER_BUSCA_ESCALACAO] Atualizando Mapeamento de IDs da ESPN para a liga %s...", lg)
-			services.SyncESPNScoreboardForLeague(lg)
+			services.SyncESPNScoreboardForLeague(ctx, lg)
 			lastScoreboardSync[lg] = time.Now()
 		}
 	}
 }
 
 func processMatches() {
+	ctx := context.Background()
+
 	// 1. PRIMEIRO: Garante que os jogos de hoje estão mapeados na tabela 'espn_matches'
-	syncScoreboards()
+	syncScoreboards(ctx)
 
 	// 2. SEGUNDO: Agora o nosso famoso JOIN vai encontrar o jogo perfeitamente!
 	log.Println("--------------------------------------------------")
 	log.Println("[WORKER_BUSCA_ESCALACAO] Buscando jogos na janela de tempo do Banco...")
 
-	matchesToday, err := database.GetTodayMatches()
+	matchesToday, err := database.GetTodayMatches(ctx)
 	if err != nil {
 		log.Printf("[WORKER_ERRO] Erro ao consultar o banco: %v", err)
 		return
@@ -87,7 +90,7 @@ func fetchAndSave(matchID string, league string) {
 	matchData, lineups, events, err := services.FetchAndParseESPNMatch(matchID, league)
 
 	if err == nil {
-		database.SaveFullMatchHistory(matchData, lineups, events)
+		database.SaveFullMatchHistory(context.Background(), matchData, lineups, events)
 		log.Printf("[WORKER_BUSCA_ESCALACAO] ✅ Escalações e eventos salvos no Banco! (Jogo %s)", matchID)
 	} else {
 		log.Printf("[WORKER_ERRO] ❌ Falha na sincronização ESPN (Jogo %s): %v", matchID, err)

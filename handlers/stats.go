@@ -20,14 +20,14 @@ func LeagueStatsHandler(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusBadRequest, "Liga não informada")
 		return
 	}
-	season = services.ResolveSeason(league, season)
+	season = services.ResolveSeason(r.Context(), league, season)
 
 	if forceUpdate {
-		services.SyncLeagueStatsBackground(league, season)
+		services.SyncLeagueStatsBackground(r.Context(), league, season)
 	}
 
-	scorers, _ := database.GetTopStats(league, season, "goals")
-	assists, _ := database.GetTopStats(league, season, "assists")
+	scorers, _ := database.GetTopStats(r.Context(), league, season, "goals")
+	assists, _ := database.GetTopStats(r.Context(), league, season, "assists")
 
 	if scorers == nil {
 		scorers = []models.PlayerStat{}

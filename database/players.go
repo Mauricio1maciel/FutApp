@@ -1,10 +1,15 @@
 package database
 
-import "App-Futebol/models"
+import (
+	"App-Futebol/models"
+	"context"
+)
 
-func GetPlayersByLeague(league string) ([]models.Player, error) {
+func GetPlayersByLeague(ctx context.Context, league string) ([]models.Player, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
 
-	rows, err := DB.Query(
+	rows, err := DB.QueryContext(ctx,
 		`SELECT 
             p.id, 
             p.api_id, 
@@ -58,8 +63,11 @@ func GetPlayersByLeague(league string) ([]models.Player, error) {
 	return players, nil
 }
 
-func SavePlayer(p models.Player) error {
-	_, err := DB.Exec(
+func SavePlayer(ctx context.Context, p models.Player) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	_, err := DB.ExecContext(ctx,
 		`INSERT INTO players (api_id, name, position, date_of_birth, nationality, team_id, league) 
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (api_id) DO UPDATE 

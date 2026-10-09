@@ -4,6 +4,7 @@ import (
 	"App-Futebol/database"
 	"App-Futebol/services"
 	"App-Futebol/utils"
+	"context"
 	"sync/atomic"
 	"time"
 )
@@ -28,39 +29,41 @@ func loopFootballDataMatches() {
 
 	index := 0
 	for ; ; <-ticker.C {
+		ctx := context.Background()
 		league := services.FootballDataLeagues[index]
 		index = (index + 1) % len(services.FootballDataLeagues)
 
-		if err := services.SyncFootballDataMatches(league); err != nil {
+		if err := services.SyncFootballDataMatches(ctx, league); err != nil {
 			utils.CustomLog("JOBS", "[%s] Erro na football-data: %v", league, err)
 		} else {
-			recalculateStandings(league)
+			recalculateStandings(ctx, league)
 		}
 
 		// A UNL não vem da football-data: os jogos chegam pela ESPN (trigger),
 		// então recalcula junto com o fim de cada volta pelas ligas
 		if index == 0 {
-			recalculateStandings("UNL")
+			recalculateStandings(ctx, "UNL")
 		}
 	}
 }
 
-func recalculateStandings(league string) {
-	season := services.ResolveSeason(league, "")
-	if err := services.RecalculateStandings(league, season); err != nil {
+func recalculateStandings(ctx context.Context, league string) {
+	season := services.ResolveSeason(ctx, league, "")
+	if err := services.RecalculateStandings(ctx, league, season); err != nil {
 		utils.CustomLog("JOBS", "[%s] Erro ao recalcular classificação: %v", league, err)
 	}
 }
 
 func loopMissingMatches() {
 	for {
+		ctx := context.Background()
 		for _, league := range services.FootballDataLeagues {
-			missing, err := database.GetMissingMatches(league)
+			missing, err := database.GetMissingMatches(ctx, league)
 			if err != nil {
 				continue
 			}
 			for _, m := range missing {
-				services.UpdateMatchFromESPN(m["home"], m["away"], m["date"], league)
+				services.UpdateMatchFromESPN(ctx, m["home"], m["away"], m["date"], league)
 				time.Sleep(5 * time.Second)
 			}
 		}
@@ -70,8 +73,9 @@ func loopMissingMatches() {
 
 func loopLeagueStats() {
 	for {
+		ctx := context.Background()
 		for league := range services.ESPNLeagueMap {
-			services.SyncLeagueStatsBackground(league, services.ResolveSeason(league, ""))
+			services.SyncLeagueStatsBackground(ctx, league, services.ResolveSeason(ctx, league, ""))
 			time.Sleep(5 * time.Second)
 		}
 		time.Sleep(6 * time.Hour)
@@ -96,19 +100,20 @@ func loopDaily() {
 // Também pode ser disparado pelo admin em /admin/sync-daily.
 func RunDailySync() {
 	utils.CustomLog("JOBS", "Iniciando sincronização diária...")
+	ctx := context.Background()
 
 	for _, league := range services.FootballDataLeagues {
-		if err := services.SyncFootballDataTeams(league); err != nil {
+		if err := services.SyncFootballDataTeams(ctx, league); err != nil {
 			utils.CustomLog("JOBS", "[%s] Erro ao sincronizar times: %v", league, err)
 		}
 		time.Sleep(15 * time.Second) // 2 chamadas por liga, folga no limite de 10/min
 	}
 
-	if _, err := services.SyncESPNTeamLinks(); err != nil {
+	if _, err := services.SyncESPNTeamLinks(ctx); err != nil {
 		utils.CustomLog("JOBS", "Erro ao vincular times à ESPN: %v", err)
 	}
 
-	services.SyncAllESPNRosters()
+	services.SyncAllESPNRosters(ctx)
 
 	utils.CustomLog("JOBS", "Sincronização diária finalizada!")
 }

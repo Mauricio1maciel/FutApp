@@ -28,7 +28,7 @@ func TeamPlayersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	espnTeamID, err := database.GetESPNTeamID(teamID)
+	espnTeamID, err := database.GetESPNTeamID(r.Context(), teamID)
 	if err != nil {
 		espnTeamID = ""
 	}
@@ -36,7 +36,7 @@ func TeamPlayersHandler(w http.ResponseWriter, r *http.Request) {
 	if espnTeamID != "" && espnTeamID != "0" {
 		espnTeamIDInt, err := strconv.ParseInt(espnTeamID, 10, 64)
 		if err == nil {
-			espnPlayers, err := database.GetESPNPlayersByTeamID(int(espnTeamIDInt))
+			espnPlayers, err := database.GetESPNPlayersByTeamID(r.Context(), int(espnTeamIDInt))
 
 			if err == nil && len(espnPlayers) > 0 {
 				utils.WriteJSON(w, http.StatusOK, espnPlayers)
@@ -46,7 +46,7 @@ func TeamPlayersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sem elenco da ESPN: usa o elenco da football-data já salvo no banco
-	fallbackPlayers, err := database.GetTeamPlayersBy(teamID, league)
+	fallbackPlayers, err := database.GetTeamPlayersBy(r.Context(), teamID, league)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar elenco")
 		return
@@ -70,7 +70,7 @@ func SyncESPNTeamHandler(w http.ResponseWriter, r *http.Request) {
 
 	teamID, _ := strconv.ParseInt(teamIDStr, 10, 64)
 
-	espnTeamID, err := database.GetESPNTeamID(teamID)
+	espnTeamID, err := database.GetESPNTeamID(r.Context(), teamID)
 	if err != nil || espnTeamID == "" || espnTeamID == "0" {
 		utils.WriteError(w, http.StatusNotFound, "Este time não possui espn_team_id mapeado no banco")
 		return
@@ -86,7 +86,7 @@ func SyncESPNTeamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	espnTeamIDInt, _ := strconv.ParseInt(espnTeamID, 10, 64)
-	err = services.SyncESPNRoster(espnLeagueSlug, int(espnTeamIDInt))
+	err = services.SyncESPNRoster(r.Context(), espnLeagueSlug, int(espnTeamIDInt))
 	if err != nil {
 		utils.WriteError(w, http.StatusBadGateway, fmt.Sprintf("Falha ao baixar os jogadores da ESPN: %v", err))
 		return

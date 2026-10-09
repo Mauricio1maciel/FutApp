@@ -1,8 +1,13 @@
 package database
 
-func GetAvailableSeasons(league string) ([]string, error) {
+import "context"
+
+func GetAvailableSeasons(ctx context.Context, league string) ([]string, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `SELECT DISTINCT season FROM matches WHERE league = $1 AND COALESCE(season, '') <> '' ORDER BY season DESC`
-	rows, err := DB.Query(query, league)
+	rows, err := DB.QueryContext(ctx, query, league)
 	if err != nil {
 		return nil, err
 	}

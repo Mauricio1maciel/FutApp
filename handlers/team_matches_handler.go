@@ -24,7 +24,7 @@ func TeamMatchesHandler(w http.ResponseWriter, r *http.Request) {
 
 	var rounds []int64
 	if roundsStr == "" {
-		currentRoundInt, _ := database.GetCurrentRoundTeam(teamIDStr)
+		currentRoundInt, _ := database.GetCurrentRoundTeam(r.Context(), teamIDStr)
 
 		rounds = append(rounds, 0)
 
@@ -42,7 +42,7 @@ func TeamMatchesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	matches, err := database.GetMatchesByTeamID(int64(teamID), rounds)
+	matches, err := database.GetMatchesByTeamID(r.Context(), int64(teamID), rounds)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogos do time")
 		return

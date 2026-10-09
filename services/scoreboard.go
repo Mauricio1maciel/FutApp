@@ -4,6 +4,7 @@ import (
 	"App-Futebol/database"
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -15,7 +16,7 @@ import (
 // Para economizar chamadas à ESPN, o próprio scoreboard já traz times, placar,
 // status, grupo e fase. O summary (escalação e eventos) só é buscado para jogos
 // ao vivo ou encerrados que ainda não estão completos no banco.
-func SyncESPNScoreboardForLeague(leagueCode string) {
+func SyncESPNScoreboardForLeague(ctx context.Context, leagueCode string) {
 	espnLeague := getESPNLeague(leagueCode)
 	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard", espnLeague)
 
@@ -43,7 +44,7 @@ func SyncESPNScoreboardForLeague(leagueCode string) {
 			ids = append(ids, id)
 		}
 	}
-	complete, err := database.GetCompleteESPNMatchIDs(ids)
+	complete, err := database.GetCompleteESPNMatchIDs(ctx, ids)
 	if err != nil {
 		utils.CustomLog("WORKER_ESPN", "Erro ao consultar jogos completos (%s): %v", leagueCode, err)
 		complete = map[string]bool{}
@@ -59,7 +60,7 @@ func SyncESPNScoreboardForLeague(leagueCode string) {
 		needsSummary := basic.Status == "in" || (basic.Status == "post" && !complete[basic.MatchID])
 		if !needsSummary {
 			// Pré-jogo ou encerrado já completo: grava só o básico, sem chamar o summary
-			database.SaveFullMatchHistory(basic, nil, nil)
+			database.SaveFullMatchHistory(ctx, basic, nil, nil)
 			continue
 		}
 
@@ -67,7 +68,7 @@ func SyncESPNScoreboardForLeague(leagueCode string) {
 		summaries++
 		if err != nil {
 			utils.CustomLog("WORKER_ESPN", "Erro no summary do jogo %s: %v", basic.MatchID, err)
-			database.SaveFullMatchHistory(basic, nil, nil)
+			database.SaveFullMatchHistory(ctx, basic, nil, nil)
 			continue
 		}
 
@@ -78,7 +79,7 @@ func SyncESPNScoreboardForLeague(leagueCode string) {
 		if basic.GroupName != "" {
 			m.GroupName = basic.GroupName
 		}
-		database.SaveFullMatchHistory(m, lineups, matchEvents)
+		database.SaveFullMatchHistory(ctx, m, lineups, matchEvents)
 	}
 
 	utils.CustomLog("WORKER_ESPN", "[%s] Scoreboard: %d jogos, %d summaries buscados", leagueCode, len(data.Events), summaries)

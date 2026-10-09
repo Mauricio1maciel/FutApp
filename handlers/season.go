@@ -13,7 +13,7 @@ func SeasonsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	seasons, err := database.GetAvailableSeasons(league)
+	seasons, err := database.GetAvailableSeasons(r.Context(), league)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar temporadas")
 		return

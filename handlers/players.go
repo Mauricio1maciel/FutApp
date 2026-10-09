@@ -18,7 +18,7 @@ func PlayersHandler(w http.ResponseWriter, r *http.Request) {
 	// Elencos vêm do banco (o worker sincroniza diariamente); só o admin força a football-data
 	forceUpdate := r.URL.Query().Get("force_update") == "true" && middlewares.IsAdmin(r)
 	if !forceUpdate {
-		players, err := database.GetPlayersByLeague(league)
+		players, err := database.GetPlayersByLeague(r.Context(), league)
 		if err != nil {
 			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogadores")
 			return
@@ -32,11 +32,11 @@ func PlayersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, player := range apiPlayers {
-		database.SavePlayer(player)
+		database.SavePlayer(r.Context(), player)
 	}
 
 	// Devolve do banco para ter o mesmo formato da leitura normal
-	players, err := database.GetPlayersByLeague(league)
+	players, err := database.GetPlayersByLeague(r.Context(), league)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogadores")
 		return

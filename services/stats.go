@@ -4,12 +4,13 @@ import (
 	"App-Futebol/database"
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 )
 
-func SyncLeagueStatsBackground(leagueCode string, season string) {
+func SyncLeagueStatsBackground(ctx context.Context, leagueCode string, season string) {
 	utils.CustomLog("STATS", "Iniciando atualização de estatísticas para a liga %s...", leagueCode)
 	espnLeague := getESPNLeague(leagueCode)
 
@@ -33,7 +34,7 @@ func SyncLeagueStatsBackground(leagueCode string, season string) {
 			teamID, _ := strconv.ParseInt(leader.Athlete.Team.ID, 10, 64)
 
 			// 2. Alimenta a tabela cadastral de jogadores
-			_ = database.UpsertESPNPlayerGeneric(
+			_ = database.UpsertESPNPlayerGeneric(ctx,
 				playerID,
 				leader.Athlete.DisplayName,
 				leader.Athlete.Headshot.Href,
@@ -53,7 +54,7 @@ func SyncLeagueStatsBackground(leagueCode string, season string) {
 			}
 
 			// 4. 🔥 Envia o playerID e o teamID correto da competição
-			database.UpsertPlayerStat(playerID, teamID, leagueCode, season, goals, assists, matches)
+			database.UpsertPlayerStat(ctx, playerID, teamID, leagueCode, season, goals, assists, matches)
 		}
 	}
 	utils.CustomLog("STATS", "Estatísticas sincronizadas de forma normalizada!")

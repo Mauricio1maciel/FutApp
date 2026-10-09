@@ -3,6 +3,7 @@ package services
 import (
 	"App-Futebol/database"
 	"App-Futebol/utils"
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -64,11 +65,13 @@ func StartImageBot() bool {
 	if !imageBotRunning.CompareAndSwap(false, true) {
 		return false
 	}
-	go RunImageBot()
+	// Contexto próprio: o robô roda em background e não pode morrer junto
+	// com a requisição do admin que o disparou
+	go RunImageBot(context.Background())
 	return true
 }
 
-func RunImageBot() {
+func RunImageBot(ctx context.Context) {
 	utils.CustomLog("BOT", "🤖 Robô iniciado: Monitorando fotos e valores de mercado.")
 
 	for {

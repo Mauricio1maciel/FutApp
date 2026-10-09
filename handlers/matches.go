@@ -25,20 +25,20 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if forceUpdate {
 		utils.CustomLog("API", "Admin forçou atualização dos jogos: %s", league)
-		if err := services.SyncFootballDataMatches(league); err != nil {
+		if err := services.SyncFootballDataMatches(r.Context(), league); err != nil {
 			log.Printf("Erro ao atualizar jogos na football-data: %v", err)
 		}
 	}
 
-	season = services.ResolveSeason(league, season)
+	season = services.ResolveSeason(r.Context(), league, season)
 
 	isCurrentRound := false
 
 	if roundStr == "" {
-		phase := database.GetCurrentPhase(league, season)
+		phase := database.GetCurrentPhase(r.Context(), league, season)
 
 		if phase == "CURRENT_ROUND" {
-			currentRoundInt, _ := database.GetCurrentRound(league, season)
+			currentRoundInt, _ := database.GetCurrentRound(r.Context(), league, season)
 			if currentRoundInt > 38 {
 				currentRoundInt = 1
 			}
@@ -49,7 +49,7 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		isCurrentRound = true
 	}
 
-	matches, err := database.GetMatchesByLeague(league, roundStr, dateStr, season, isCurrentRound)
+	matches, err := database.GetMatchesByLeague(r.Context(), league, roundStr, dateStr, season, isCurrentRound)
 	if err != nil {
 		log.Printf("Erro ao buscar jogos no banco: %v", err)
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogos")

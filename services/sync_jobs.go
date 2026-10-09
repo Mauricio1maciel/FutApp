@@ -4,6 +4,7 @@ import (
 	"App-Futebol/database"
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 	"fmt"
 	"time"
 )
@@ -15,14 +16,14 @@ import (
 var FootballDataLeagues = []string{"BSA", "PL", "PD", "SA", "BL1", "FL1", "CL", "CLI", "WC"}
 
 // SyncFootballDataMatches baixa todos os jogos de uma liga na football-data e grava no banco
-func SyncFootballDataMatches(league string) error {
+func SyncFootballDataMatches(ctx context.Context, league string) error {
 	apiMatches, err := GetMatchesByLeagueCode(league)
 	if err != nil {
 		return err
 	}
 
 	// Uma consulta só, em vez de uma por jogo
-	format := database.GetLeagueSeasonFormat(league)
+	format := database.GetLeagueSeasonFormat(ctx, league)
 
 	saved := 0
 	for _, m := range apiMatches {
@@ -47,7 +48,7 @@ func SyncFootballDataMatches(league string) error {
 			awayScore = awayScore - aP
 		}
 
-		err := database.SaveMatch(
+		err := database.SaveMatch(ctx,
 			int64(m.ID), league,
 			SeasonFromDate(m.UTCDate, format),
 			m.Matchday,
@@ -69,16 +70,16 @@ func SyncFootballDataMatches(league string) error {
 
 // RecalculateStandings calcula a classificação a partir dos jogos do banco e salva.
 // Não chama nenhuma API externa.
-func RecalculateStandings(league, season string) error {
-	matches, err := database.GetMatchesByLeague(league, "", "", season, false)
+func RecalculateStandings(ctx context.Context, league, season string) error {
+	matches, err := database.GetMatchesByLeague(ctx, league, "", "", season, false)
 	if err != nil {
 		return err
 	}
 
-	winners, _ := database.GetWinnersBySeasonAndSeason(league, season)
-	rule, _ := database.GetCompetitionRule(league, season)
-	zones, _ := database.GetZonesByLeague(league)
-	criteria, _ := database.GetTieBreakers(league, season)
+	winners, _ := database.GetWinnersBySeasonAndSeason(ctx, league, season)
+	rule, _ := database.GetCompetitionRule(ctx, league, season)
+	zones, _ := database.GetZonesByLeague(ctx, league)
+	criteria, _ := database.GetTieBreakers(ctx, league, season)
 
 	var standings []models.Standing
 
@@ -109,19 +110,19 @@ func RecalculateStandings(league, season string) error {
 		standings[i].Season = season
 	}
 
-	return database.ReplaceStandings(league, season, standings)
+	return database.ReplaceStandings(ctx, league, season, standings)
 }
 
 // SyncFootballDataTeams grava os times e os elencos de uma liga da football-data
-func SyncFootballDataTeams(league string) error {
-	season := CurrentSeason(league)
+func SyncFootballDataTeams(ctx context.Context, league string) error {
+	season := CurrentSeason(ctx, league)
 
 	teams, err := GetTeams(league)
 	if err != nil {
 		return fmt.Errorf("times: %w", err)
 	}
 	for _, t := range teams {
-		database.SaveTeam(int64(t.ID), t.Name, t.Short, t.TLA, league, t.Stadium, t.Crest, season)
+		database.SaveTeam(ctx, int64(t.ID), t.Name, t.Short, t.TLA, league, t.Stadium, t.Crest, season)
 	}
 
 	players, err := GetPlayers(league)
@@ -129,7 +130,7 @@ func SyncFootballDataTeams(league string) error {
 		return fmt.Errorf("elencos: %w", err)
 	}
 	for _, p := range players {
-		database.SavePlayer(p)
+		database.SavePlayer(ctx, p)
 	}
 
 	utils.CustomLog("JOBS", "[%s] Football-Data: %d times e %d jogadores gravados", league, len(teams), len(players))
@@ -138,8 +139,8 @@ func SyncFootballDataTeams(league string) error {
 
 // SyncAllESPNRosters atualiza o elenco (fotos, números, posições) de todos os times
 // vinculados à ESPN
-func SyncAllESPNRosters() {
-	teams, err := database.GetESPNTeamsForRosterSync()
+func SyncAllESPNRosters(ctx context.Context) {
+	teams, err := database.GetESPNTeamsForRosterSync(ctx)
 	if err != nil {
 		utils.CustomLog("JOBS", "Erro ao listar times para elencos da ESPN: %v", err)
 		return
@@ -147,7 +148,7 @@ func SyncAllESPNRosters() {
 
 	ok := 0
 	for _, t := range teams {
-		if err := SyncESPNRoster(t.ESPNLeague, int(t.ESPNTeamID)); err != nil {
+		if err := SyncESPNRoster(ctx, t.ESPNLeague, int(t.ESPNTeamID)); err != nil {
 			utils.CustomLog("JOBS", "Elenco ESPN do time %d falhou: %v", t.ESPNTeamID, err)
 		} else {
 			ok++

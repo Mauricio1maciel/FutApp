@@ -2,12 +2,16 @@ package database
 
 import (
 	"App-Futebol/models"
+	"context"
 	"strings"
 )
 
-func GetUserByEmail(email string) (models.User, error) {
+func GetUserByEmail(ctx context.Context, email string) (models.User, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	var u models.User
-	err := DB.QueryRow(
+	err := DB.QueryRowContext(ctx,
 		`SELECT id, email, password_hash, role FROM users WHERE email = $1`,
 		strings.ToLower(strings.TrimSpace(email)),
 	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role)
@@ -15,9 +19,12 @@ func GetUserByEmail(email string) (models.User, error) {
 }
 
 // UpsertUser cria o usuário ou, se o e-mail já existir, troca a senha e o papel
-func UpsertUser(email string, passwordHash string, role string) (int64, error) {
+func UpsertUser(ctx context.Context, email string, passwordHash string, role string) (int64, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	var id int64
-	err := DB.QueryRow(`
+	err := DB.QueryRowContext(ctx, `
 		INSERT INTO users (email, password_hash, role)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (email) DO UPDATE
@@ -29,6 +36,9 @@ func UpsertUser(email string, passwordHash string, role string) (int64, error) {
 	return id, err
 }
 
-func TouchUserLogin(userID int64) {
-	DB.Exec(`UPDATE users SET last_login_at = now() WHERE id = $1`, userID)
+func TouchUserLogin(ctx context.Context, userID int64) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	DB.ExecContext(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1`, userID)
 }

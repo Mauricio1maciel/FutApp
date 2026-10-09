@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -13,6 +14,31 @@ import (
 )
 
 var DB *sql.DB
+
+// Limites de tempo das operações no banco. Sem eles, uma consulta travada
+// segurava a requisição até o WriteTimeout do servidor (90s) e mantinha a
+// conexão presa no pool.
+const (
+	queryTimeout = 10 * time.Second // uma consulta avulsa
+	txTimeout    = 30 * time.Second // transação, que roda vários comandos
+)
+
+// withTimeout limita uma consulta, respeitando o cancelamento de quem chamou:
+// se o app desiste da requisição, a consulta é cancelada no banco também.
+func withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithTimeout(ctx, queryTimeout)
+}
+
+// withTxTimeout é o withTimeout das transações, que precisam de mais folga
+func withTxTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithTimeout(ctx, txTimeout)
+}
 
 func Connect() {
 	host := os.Getenv("DB_HOST")
@@ -58,7 +84,9 @@ func Connect() {
 	}
 
 	// Testa a conexão
-	err = db.Ping()
+	pingCtx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	err = db.PingContext(pingCtx)
 	if err != nil {
 		log.Fatalf("Erro ao pingar o banco: %v", err)
 	}

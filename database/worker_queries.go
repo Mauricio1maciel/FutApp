@@ -4,9 +4,13 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 )
 
-func GetTodayMatches() ([]models.WorkerMatch, error) {
+func GetTodayMatches(ctx context.Context) ([]models.WorkerMatch, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `
         SELECT 
             espn_match_id::TEXT, 
@@ -19,7 +23,7 @@ func GetTodayMatches() ([]models.WorkerMatch, error) {
           AND match_date <= (NOW() AT TIME ZONE 'UTC') + INTERVAL '24 hours'
     `
 
-	rows, err := DB.Query(query)
+	rows, err := DB.QueryContext(ctx, query)
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Falha ao buscar jogos para o Worker: %v", err)
 		return nil, err
@@ -42,6 +46,9 @@ func GetTodayMatches() ([]models.WorkerMatch, error) {
 	return matches, nil
 }
 
-func GetActiveLeaguesToday() []string {
+func GetActiveLeaguesToday(ctx context.Context) []string {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	return []string{"BSA", "PL", "PD", "PD", "SA", "CL", "BL1", "FL1", "CLI", "CSU", "WC", "UNL"}
 }

@@ -3,12 +3,16 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 )
 
 // GetLeaguesForTeamSync devolve as ligas (code_api -> code_espn) cobertas pela football-data.
 // A UNL fica de fora: lá os times já são cadastrados com o próprio ID da ESPN.
-func GetLeaguesForTeamSync() (map[string]string, error) {
-	rows, err := DB.Query(`SELECT code_api, code_espn FROM leagues WHERE COALESCE(code_espn, '') <> '' AND code_api <> 'UNL'`)
+func GetLeaguesForTeamSync(ctx context.Context) (map[string]string, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	rows, err := DB.QueryContext(ctx, `SELECT code_api, code_espn FROM leagues WHERE COALESCE(code_espn, '') <> '' AND code_api <> 'UNL'`)
 	if err != nil {
 		return nil, err
 	}
@@ -28,8 +32,11 @@ func GetLeaguesForTeamSync() (map[string]string, error) {
 // LinkESPNTeams vincula os times da football-data de uma liga (ainda sem espn_team_id)
 // aos times da ESPN da mesma liga. Só vincula quando há exatamente um candidato,
 // e pula (com log) IDs da ESPN que já pertencem a outro time, em vez de abortar tudo.
-func LinkESPNTeams(league string, espnTeams []models.ESPNTeam) (int, error) {
-	rows, err := DB.Query(`
+func LinkESPNTeams(ctx context.Context, league string, espnTeams []models.ESPNTeam) (int, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	rows, err := DB.QueryContext(ctx, `
 		SELECT DISTINCT t.api_id, COALESCE(t.name, ''), COALESCE(t.short, '')
 		FROM teams t
 		JOIN team_leagues tl ON tl.team_api_id = t.api_id
@@ -60,7 +67,7 @@ func LinkESPNTeams(league string, espnTeams []models.ESPNTeam) (int, error) {
 
 	// IDs da ESPN que já têm dono na tabela teams (UNIQUE espn_team_id)
 	owners := make(map[int64]int64)
-	ownerRows, err := DB.Query(`SELECT espn_team_id, api_id FROM teams WHERE espn_team_id IS NOT NULL`)
+	ownerRows, err := DB.QueryContext(ctx, `SELECT espn_team_id, api_id FROM teams WHERE espn_team_id IS NOT NULL`)
 	if err != nil {
 		return 0, err
 	}
@@ -88,7 +95,7 @@ func LinkESPNTeams(league string, espnTeams []models.ESPNTeam) (int, error) {
 			continue
 		}
 
-		if _, err := DB.Exec(`UPDATE teams SET espn_team_id = $1 WHERE api_id = $2`, espnTeam.ID, apiTeam.ApiID); err != nil {
+		if _, err := DB.ExecContext(ctx, `UPDATE teams SET espn_team_id = $1 WHERE api_id = $2`, espnTeam.ID, apiTeam.ApiID); err != nil {
 			utils.CustomLog("SYNC_TEAMS", "[%s] Falha ao vincular %s (%d): %v", league, apiTeam.Name, apiTeam.ApiID, err)
 			continue
 		}
@@ -140,8 +147,11 @@ type ESPNRosterTarget struct {
 
 // GetESPNTeamsForRosterSync lista cada time vinculado à ESPN uma vez, com o slug
 // de uma das ligas em que ele joga (ex: "bra.1")
-func GetESPNTeamsForRosterSync() ([]ESPNRosterTarget, error) {
-	rows, err := DB.Query(`
+func GetESPNTeamsForRosterSync(ctx context.Context) ([]ESPNRosterTarget, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	rows, err := DB.QueryContext(ctx, `
 		SELECT DISTINCT ON (t.espn_team_id) t.espn_team_id, l.code_espn
 		FROM teams t
 		JOIN team_leagues tl ON tl.team_api_id = t.api_id

@@ -189,7 +189,7 @@ func createAdminUser(email string) error {
 		return err
 	}
 
-	id, err := database.UpsertUser(email, string(hash), models.RoleAdmin)
+	id, err := database.UpsertUser(context.Background(), email, string(hash), models.RoleAdmin)
 	if err != nil {
 		return err
 	}

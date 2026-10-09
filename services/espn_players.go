@@ -3,13 +3,14 @@ package services
 import (
 	"App-Futebol/database"
 	"App-Futebol/models"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"strconv"
 )
 
-func SyncESPNRoster(leagueESPNSlug string, espnTeamID int) error {
+func SyncESPNRoster(ctx context.Context, leagueESPNSlug string, espnTeamID int) error {
 	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%v/teams/%v/roster", leagueESPNSlug, espnTeamID)
 
 	resp, err := httpClient.Get(url)
@@ -61,7 +62,7 @@ func SyncESPNRoster(leagueESPNSlug string, espnTeamID int) error {
 			TeamID:       espnTeamID,
 		}
 
-		database.UpsertESPNPlayer(player)
+		database.UpsertESPNPlayer(ctx, player)
 	}
 
 	return nil

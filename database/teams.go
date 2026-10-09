@@ -2,10 +2,13 @@ package database
 
 import (
 	"App-Futebol/models"
+	"context"
 	"fmt"
 )
 
-func GetTeamsByLeague(league string) ([]models.Team, error) {
+func GetTeamsByLeague(ctx context.Context, league string) ([]models.Team, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
 
 	query := `
         SELECT 
@@ -23,7 +26,7 @@ func GetTeamsByLeague(league string) ([]models.Team, error) {
         ORDER BY t.name ASC
     `
 
-	rows, err := DB.Query(query, league)
+	rows, err := DB.QueryContext(ctx, query, league)
 
 	if err != nil {
 		return nil, err
@@ -64,8 +67,11 @@ func GetTeamsByLeague(league string) ([]models.Team, error) {
 // O trigger trg_sync_espn_to_matches usa o mesmo valor (migration 006).
 const ESPNOnlyTeamIDOffset int64 = 1_000_000_000
 
-func SaveTeam(apiID int64, name string, short string, tla string, league string, stadium string, crest string, season string) error {
-	_, err := DB.Exec(
+func SaveTeam(ctx context.Context, apiID int64, name string, short string, tla string, league string, stadium string, crest string, season string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	_, err := DB.ExecContext(ctx,
 		`INSERT INTO teams (api_id, name, short, tla, stadium, crest_url) 
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (api_id) 
@@ -82,7 +88,7 @@ func SaveTeam(apiID int64, name string, short string, tla string, league string,
 		fmt.Printf("ERRO NO BANCO AO SALVAR TIME %d: %v\n", apiID, err)
 		return err
 	}
-	_, err = DB.Exec(
+	_, err = DB.ExecContext(ctx,
 		`INSERT INTO team_leagues (team_api_id, league, season) 
          VALUES ($1, $2, $3)
          ON CONFLICT (team_api_id, league, season) DO NOTHING`,

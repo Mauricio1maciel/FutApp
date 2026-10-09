@@ -2,6 +2,7 @@ package database
 
 import (
 	"App-Futebol/utils"
+	"context"
 
 	"github.com/lib/pq"
 )
@@ -11,7 +12,10 @@ type CalendarDay struct {
 	Count int    `json:"count"`
 }
 
-func GetCalendarCounts(leagues []string, month string, year string) ([]CalendarDay, error) {
+func GetCalendarCounts(ctx context.Context, leagues []string, month string, year string) ([]CalendarDay, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `
 		SELECT TO_CHAR(match_date AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS day, COUNT(*)
 		FROM matches
@@ -21,7 +25,7 @@ func GetCalendarCounts(leagues []string, month string, year string) ([]CalendarD
 		GROUP BY day
 	`
 
-	rows, err := DB.Query(query, month, year, pq.Array(leagues))
+	rows, err := DB.QueryContext(ctx, query, month, year, pq.Array(leagues))
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Erro na query GetCalendarCounts: %v", err)
 		return nil, err

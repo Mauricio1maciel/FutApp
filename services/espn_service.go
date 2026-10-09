@@ -4,6 +4,7 @@ import (
 	"App-Futebol/database"
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -96,7 +97,7 @@ func GetLiveScoreboard(leagueCode string, date string) ([]models.AppLiveMatch, e
 	return liveMatches, nil
 }
 
-func UpdateMatchFromESPN(home, away, dateStr, leagueCode string) error {
+func UpdateMatchFromESPN(ctx context.Context, home, away, dateStr, leagueCode string) error {
 	if len(dateStr) < 10 {
 		return fmt.Errorf("data inválida: %s", dateStr)
 	}
@@ -124,7 +125,7 @@ func UpdateMatchFromESPN(home, away, dateStr, leagueCode string) error {
 		return err
 	}
 
-	return database.SaveFullMatchHistory(matchDB, lineups, events)
+	return database.SaveFullMatchHistory(ctx, matchDB, lineups, events)
 }
 
 func getESPNLeague(leagueCode string) string {

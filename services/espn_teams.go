@@ -4,6 +4,7 @@ import (
 	"App-Futebol/database"
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -63,8 +64,8 @@ func FetchESPNTeams(espnLeagueSlug string) ([]models.ESPNTeam, error) {
 }
 
 // SyncESPNTeamLinks percorre as ligas da football-data e vincula os times sem espn_team_id
-func SyncESPNTeamLinks() (int, error) {
-	leagues, err := database.GetLeaguesForTeamSync()
+func SyncESPNTeamLinks(ctx context.Context) (int, error) {
+	leagues, err := database.GetLeaguesForTeamSync(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -77,7 +78,7 @@ func SyncESPNTeamLinks() (int, error) {
 			continue
 		}
 
-		linked, err := database.LinkESPNTeams(league, espnTeams)
+		linked, err := database.LinkESPNTeams(ctx, league, espnTeams)
 		if err != nil {
 			utils.CustomLog("SYNC_TEAMS", "[%s] Erro ao vincular times: %v", league, err)
 			continue

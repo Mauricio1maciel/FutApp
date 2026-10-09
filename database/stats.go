@@ -2,10 +2,14 @@ package database
 
 import (
 	"App-Futebol/models"
+	"context"
 	"fmt"
 )
 
-func UpsertESPNPlayerGeneric(playerID int64, name string, headshot string, teamID int64) error {
+func UpsertESPNPlayerGeneric(ctx context.Context, playerID int64, name string, headshot string, teamID int64) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `
     INSERT INTO espn_players (espn_id, name, headshot_url, espn_team_id)
     VALUES ($1, $2, $3, $4)
@@ -15,11 +19,14 @@ func UpsertESPNPlayerGeneric(playerID int64, name string, headshot string, teamI
         headshot_url = EXCLUDED.headshot_url
         -- Removi espn_team_id daqui! Ele só é inserido na criação.
     `
-	_, err := DB.Exec(query, playerID, name, headshot, teamID)
+	_, err := DB.ExecContext(ctx, query, playerID, name, headshot, teamID)
 	return err
 }
 
-func UpsertPlayerStat(playerID int64, espnTeamID int64, league, season string, goals, assists, matches int) error {
+func UpsertPlayerStat(ctx context.Context, playerID int64, espnTeamID int64, league, season string, goals, assists, matches int) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `
     INSERT INTO player_stats (espn_player_id, espn_team_id, league, season, goals, assists, matches)
     VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -30,11 +37,13 @@ func UpsertPlayerStat(playerID int64, espnTeamID int64, league, season string, g
         assists = GREATEST(player_stats.assists, EXCLUDED.assists),
         matches = GREATEST(player_stats.matches, EXCLUDED.matches)
     `
-	_, err := DB.Exec(query, playerID, espnTeamID, league, season, goals, assists, matches)
+	_, err := DB.ExecContext(ctx, query, playerID, espnTeamID, league, season, goals, assists, matches)
 	return err
 }
 
-func GetTopStats(league string, season string, statType string) ([]models.PlayerStat, error) {
+func GetTopStats(ctx context.Context, league string, season string, statType string) ([]models.PlayerStat, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
 
 	orderBy := "ps.goals DESC, ps.assists DESC, ps.matches ASC"
 	whereClause := "ps.goals > 0"
@@ -60,7 +69,7 @@ func GetTopStats(league string, season string, statType string) ([]models.Player
         LIMIT 20
     `, statType, whereClause, orderBy)
 
-	rows, err := DB.Query(query, league, season)
+	rows, err := DB.QueryContext(ctx, query, league, season)
 	if err != nil {
 		return nil, err
 	}

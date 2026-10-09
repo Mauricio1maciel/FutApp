@@ -3,11 +3,15 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 	"log"
 	"strconv"
 )
 
-func GetMatchesByLeague(league string, roundStr string, dateStr string, season string, isCurrentRound bool) ([]models.Match, error) {
+func GetMatchesByLeague(ctx context.Context, league string, roundStr string, dateStr string, season string, isCurrentRound bool) ([]models.Match, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `
     SELECT 
         COALESCE(e.espn_match_id::TEXT, 0::TEXT),  
@@ -67,7 +71,7 @@ func GetMatchesByLeague(league string, roundStr string, dateStr string, season s
 
 	query += ` ORDER BY m.match_date ASC`
 
-	rows, err := DB.Query(query, args...)
+	rows, err := DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Erro na query GetMatchesByLeague: %v", err)
 		return nil, err
@@ -115,7 +119,7 @@ func GetMatchesByLeague(league string, roundStr string, dateStr string, season s
 	return matches, nil
 }
 
-func SaveMatch(
+func SaveMatch(ctx context.Context,
 	idEvent int64,
 	league string,
 	season string,
@@ -154,7 +158,7 @@ func SaveMatch(
 		 winner = EXCLUDED.winner
     `
 
-	_, err := DB.Exec(
+	_, err := DB.ExecContext(ctx,
 		query,
 		idEvent,
 		league,
@@ -180,7 +184,10 @@ func SaveMatch(
 	return err
 }
 
-func GetCurrentRound(league string, season string) (int, error) {
+func GetCurrentRound(ctx context.Context, league string, season string) (int, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	var round int
 
 	query := `
@@ -190,14 +197,14 @@ func GetCurrentRound(league string, season string) (int, error) {
 		  AND round > 0
 		ORDER BY match_date ASC LIMIT 1
 	`
-	err := DB.QueryRow(query, league, season).Scan(&round)
+	err := DB.QueryRowContext(ctx, query, league, season).Scan(&round)
 
 	if err != nil {
 		queryFallback := `
 			SELECT MAX(round) FROM matches 
 			WHERE league = $1 AND season = $2
 		`
-		DB.QueryRow(queryFallback, league, season).Scan(&round)
+		DB.QueryRowContext(ctx, queryFallback, league, season).Scan(&round)
 	}
 
 	if round == 0 {
@@ -207,7 +214,10 @@ func GetCurrentRound(league string, season string) (int, error) {
 	return round, nil
 }
 
-func GetCurrentPhase(league string, season string) string {
+func GetCurrentPhase(ctx context.Context, league string, season string) string {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	var stage string
 
 	query := `
@@ -219,7 +229,7 @@ func GetCurrentPhase(league string, season string) string {
           AND stage NOT IN ('REGULAR_SEASON', 'GROUP_STAGE')
         ORDER BY match_date ASC LIMIT 1
     `
-	err := DB.QueryRow(query, league, season).Scan(&stage)
+	err := DB.QueryRowContext(ctx, query, league, season).Scan(&stage)
 
 	if err != nil {
 		return "CURRENT_ROUND"
@@ -228,11 +238,14 @@ func GetCurrentPhase(league string, season string) string {
 	return stage
 }
 
-func GetLatestSeason(league string) string {
+func GetLatestSeason(ctx context.Context, league string) string {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	var season string
 	// Sem o filtro, um único jogo com season NULL vem primeiro no DESC e derruba a consulta
 	query := `SELECT season FROM matches WHERE league = $1 AND COALESCE(season, '') <> '' ORDER BY season DESC LIMIT 1`
-	err := DB.QueryRow(query, league).Scan(&season)
+	err := DB.QueryRowContext(ctx, query, league).Scan(&season)
 	if err != nil {
 		return "" // Sem jogos: quem chama decide (services.ResolveSeason usa a temporada de hoje)
 	}

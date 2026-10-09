@@ -10,7 +10,7 @@ import (
 func SyncTeamsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Disparando sincronização manual de times...")
 
-	linked, err := services.SyncESPNTeamLinks()
+	linked, err := services.SyncESPNTeamLinks(r.Context())
 	if err != nil {
 		log.Printf("[ERRO] Falha na sincronização manual: %v", err)
 		utils.WriteError(w, http.StatusInternalServerError, "Falha ao sincronizar times")

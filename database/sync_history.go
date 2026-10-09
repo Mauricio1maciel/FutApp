@@ -1,6 +1,11 @@
 package database
 
-func GetMissingMatches(league string) ([]map[string]string, error) {
+import "context"
+
+func GetMissingMatches(ctx context.Context, league string) ([]map[string]string, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `
         SELECT 
             COALESCE(th.name, ''), 
@@ -20,7 +25,7 @@ func GetMissingMatches(league string) ([]map[string]string, error) {
         ORDER BY m.match_date DESC
         LIMIT 10`
 
-	rows, err := DB.Query(query, league)
+	rows, err := DB.QueryContext(ctx, query, league)
 	if err != nil {
 		return nil, err
 	}

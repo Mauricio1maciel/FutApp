@@ -3,11 +3,15 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 
 	"github.com/lib/pq"
 )
 
-func GetMatchesByTeamID(teamID int64, rounds []int64) ([]models.Match, error) {
+func GetMatchesByTeamID(ctx context.Context, teamID int64, rounds []int64) ([]models.Match, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `
     SELECT 
         COALESCE(e.espn_match_id::TEXT, 0::TEXT), 
@@ -51,7 +55,7 @@ func GetMatchesByTeamID(teamID int64, rounds []int64) ([]models.Match, error) {
 
 	query += ` ORDER BY m.match_date ASC`
 
-	rows, err := DB.Query(query, args...)
+	rows, err := DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Erro na query GetMatchesByTeamID: %v", err)
 		return nil, err
@@ -97,7 +101,10 @@ func GetMatchesByTeamID(teamID int64, rounds []int64) ([]models.Match, error) {
 	return matches, nil
 }
 
-func GetCurrentRoundTeam(teamIDStr string) (int, error) {
+func GetCurrentRoundTeam(ctx context.Context, teamIDStr string) (int, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	var round int
 
 	query := `
@@ -105,11 +112,11 @@ func GetCurrentRoundTeam(teamIDStr string) (int, error) {
         WHERE (m.api_home_team_id = $1 OR m.api_away_team_id = $1) AND match_date <= NOW() 
         ORDER BY match_date DESC LIMIT 1
     `
-	err := DB.QueryRow(query, teamIDStr).Scan(&round)
+	err := DB.QueryRowContext(ctx, query, teamIDStr).Scan(&round)
 
 	if err != nil {
 		queryFallback := `SELECT COALESCE(MAX(round), 1) FROM matches m WHERE m.api_home_team_id = $1 OR m.api_away_team_id = $1`
-		errFallback := DB.QueryRow(queryFallback, teamIDStr).Scan(&round)
+		errFallback := DB.QueryRowContext(ctx, queryFallback, teamIDStr).Scan(&round)
 		if errFallback != nil {
 			utils.CustomLog("DB_ERRO", "Erro no fallback GetCurrentRoundTeam: %v", errFallback)
 			return 1, nil

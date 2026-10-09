@@ -2,10 +2,14 @@ package database
 
 import (
 	"App-Futebol/models"
+	"context"
 	"log"
 )
 
-func UpsertESPNPlayer(player models.Player) error {
+func UpsertESPNPlayer(ctx context.Context, player models.Player) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `
 	INSERT INTO espn_players (
 		espn_id, name, short_name, position, jersey_number, headshot_url, espn_team_id, nationality,date_of_birth
@@ -23,7 +27,7 @@ func UpsertESPNPlayer(player models.Player) error {
 		date_of_birth = EXCLUDED.date_of_birth
 	`
 
-	_, err := DB.Exec(
+	_, err := DB.ExecContext(ctx,
 		query,
 		player.ID,
 		player.Name,
@@ -43,17 +47,23 @@ func UpsertESPNPlayer(player models.Player) error {
 	return err
 }
 
-func GetESPNTeamID(apiTeamID int64) (string, error) {
+func GetESPNTeamID(ctx context.Context, apiTeamID int64) (string, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	var espnID string
 	query := `SELECT COALESCE(espn_team_id, 0) FROM teams WHERE api_id = $1`
-	err := DB.QueryRow(query, apiTeamID).Scan(&espnID)
+	err := DB.QueryRowContext(ctx, query, apiTeamID).Scan(&espnID)
 	if err != nil {
 		return "", err
 	}
 	return espnID, nil
 }
 
-func GetESPNPlayersByTeamID(espnTeamID int) ([]models.Player, error) {
+func GetESPNPlayersByTeamID(ctx context.Context, espnTeamID int) ([]models.Player, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	query := `
         SELECT 
             ep.espn_id, 
@@ -71,7 +81,7 @@ func GetESPNPlayersByTeamID(espnTeamID int) ([]models.Player, error) {
         WHERE ep.espn_team_id = $1
         ORDER BY ep.position, ep.name
     `
-	rows, err := DB.Query(query, espnTeamID)
+	rows, err := DB.QueryContext(ctx, query, espnTeamID)
 	if err != nil {
 		return nil, err
 	}

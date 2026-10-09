@@ -1,10 +1,15 @@
 package database
 
-import "App-Futebol/models"
+import (
+	"App-Futebol/models"
+	"context"
+)
 
-func GetZonesByLeague(league string) ([]models.CompetitionZone, error) {
+func GetZonesByLeague(ctx context.Context, league string) ([]models.CompetitionZone, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
 
-	rows, err := DB.Query(`
+	rows, err := DB.QueryContext(ctx, `
 		SELECT league, zone_key, zone_name, priority
 		FROM competition_zones
 		WHERE league = $1

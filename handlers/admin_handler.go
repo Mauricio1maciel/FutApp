@@ -13,7 +13,7 @@ func ForceSyncHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	if league == "" {
 		league = "BSA"
 	}
-	missing, err := database.GetMissingMatches(league)
+	missing, err := database.GetMissingMatches(r.Context(), league)
 	if err != nil {
 		log.Printf("Erro ao buscar jogos faltantes: %v", err)
 		utils.WriteError(w, 500, "Erro interno ao buscar dados")
@@ -21,7 +21,7 @@ func ForceSyncHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, m := range missing {
 		log.Printf("🔄 Sincronizando: %s vs %s na data %s", m["home"], m["away"], m["date"])
-		err := services.UpdateMatchFromESPN(m["home"], m["away"], m["date"], league)
+		err := services.UpdateMatchFromESPN(r.Context(), m["home"], m["away"], m["date"], league)
 		if err != nil {
 			log.Printf("⚠️ Falha ao sincronizar %s: %v", m["home"], err)
 			continue

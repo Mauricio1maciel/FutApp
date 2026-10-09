@@ -20,10 +20,10 @@ func TeamsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if season == "" {
-		season = services.CurrentSeason(league)
+		season = services.CurrentSeason(r.Context(), league)
 	}
 	if !forceUpdate {
-		teams, err := database.GetTeamsByLeague(league)
+		teams, err := database.GetTeamsByLeague(r.Context(), league)
 		if err != nil {
 			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar times")
 			return
@@ -40,7 +40,7 @@ func TeamsHandler(w http.ResponseWriter, r *http.Request) {
 
 	savedCount := 0
 	for _, team := range teams {
-		err := database.SaveTeam(
+		err := database.SaveTeam(r.Context(),
 			int64(team.ID),
 			team.Name,
 			team.Short,
@@ -55,7 +55,7 @@ func TeamsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	utils.CustomLog("API", "Admin atualizou %d times da liga %s", savedCount, league)
 
-	updated, err := database.GetTeamsByLeague(league)
+	updated, err := database.GetTeamsByLeague(r.Context(), league)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar times")
 		return

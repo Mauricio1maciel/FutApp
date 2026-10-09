@@ -1,9 +1,15 @@
 package database
 
-import "App-Futebol/models"
+import (
+	"App-Futebol/models"
+	"context"
+)
 
-func GetTeamPlayersBy(teamID int64, league string) ([]models.Player, error) {
-	rows, err := DB.Query(
+func GetTeamPlayersBy(ctx context.Context, teamID int64, league string) ([]models.Player, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	rows, err := DB.QueryContext(ctx,
 		`SELECT 
             p.id, 
             p.api_id, 

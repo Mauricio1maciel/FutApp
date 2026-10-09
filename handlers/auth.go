@@ -133,7 +133,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := database.GetUserByEmail(req.Email)
+	user, err := database.GetUserByEmail(r.Context(), req.Email)
 	hash := []byte(user.PasswordHash)
 	if err != nil {
 		hash = dummyPasswordHash
@@ -155,7 +155,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	database.TouchUserLogin(user.ID)
+	database.TouchUserLogin(r.Context(), user.ID)
 	utils.CustomLog("AUTH", "Login de %s (%s)", user.Email, user.Role)
 
 	utils.WriteJSON(w, http.StatusOK, map[string]string{

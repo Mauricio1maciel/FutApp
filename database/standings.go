@@ -3,28 +3,32 @@ package database
 import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
+	"context"
 )
 
 // ReplaceStandings troca a classificação inteira numa única transação,
 // para o app nunca ler a tabela vazia ou com linhas duplicadas.
-func ReplaceStandings(league string, season string, standings []models.Standing) error {
-	tx, err := DB.Begin()
+func ReplaceStandings(ctx context.Context, league string, season string, standings []models.Standing) error {
+	ctx, cancel := withTxTimeout(ctx)
+	defer cancel()
+
+	tx, err := DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
 	// Serializa recálculos simultâneos da mesma liga/temporada
-	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext($1))`, league+"|"+season); err != nil {
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, league+"|"+season); err != nil {
 		return err
 	}
 
-	if _, err := tx.Exec("DELETE FROM standings WHERE league = $1 AND season = $2", league, season); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM standings WHERE league = $1 AND season = $2", league, season); err != nil {
 		return err
 	}
 
 	for _, s := range standings {
-		_, err := tx.Exec(`
+		_, err := tx.ExecContext(ctx, `
             INSERT INTO standings
             (league, position, team_id, played, wins, draws, losses, goals_for, goals_against, goal_diff, points, zone, season, group_name)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
@@ -54,22 +58,24 @@ func ReplaceStandings(league string, season string, standings []models.Standing)
 	return tx.Commit()
 }
 
-func GetStandingsByLeague(league string, season string) ([]models.Standing, error) {
+func GetStandingsByLeague(ctx context.Context, league string, season string) ([]models.Standing, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
 
-	rows, err := DB.Query(`
+	rows, err := DB.QueryContext(ctx, `
     SELECT 
-        s.position,
-        s.team_id, 
+        COALESCE(s.position, 0),
+        COALESCE(s.team_id, 0), 
         COALESCE(t.name, ''),
-        s.played,
-        s.wins,
-        s.draws,
-        s.losses,
-        s.goals_for,
-        s.goals_against,
-        s.goal_diff,
-        s.points,
-        s.season,
+        COALESCE(s.played, 0),
+        COALESCE(s.wins, 0),
+        COALESCE(s.draws, 0),
+        COALESCE(s.losses, 0),
+        COALESCE(s.goals_for, 0),
+        COALESCE(s.goals_against, 0),
+        COALESCE(s.goal_diff, 0),
+        COALESCE(s.points, 0),
+        COALESCE(s.season, ''),
         COALESCE(t.crest_url, ''),
         COALESCE(s.zone, ''),
         COALESCE(s.group_name, '')
@@ -80,6 +86,7 @@ func GetStandingsByLeague(league string, season string) ([]models.Standing, erro
 `, league, season)
 
 	if err != nil {
+		utils.CustomLog("DB_ERRO", "Erro na query GetStandingsByLeague: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -108,6 +115,7 @@ func GetStandingsByLeague(league string, season string) ([]models.Standing, erro
 		)
 
 		if err != nil {
+			utils.CustomLog("DB_ERRO", "Erro no Scan de GetStandingsByLeague: %v", err)
 			return nil, err
 		}
 		standings = append(standings, s)

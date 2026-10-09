@@ -20,17 +20,17 @@ func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	season = services.ResolveSeason(league, season)
+	season = services.ResolveSeason(r.Context(), league, season)
 
-	result, err := database.GetStandingsByLeague(league, season)
+	result, err := database.GetStandingsByLeague(r.Context(), league, season)
 
 	// Recalcula se o admin pediu ou se a tabela ainda não existe (usa só o banco)
 	if forceUpdate || (err == nil && len(result) == 0) {
 		utils.CustomLog("API", "Calculando classificação: %s %s (admin=%v)", league, season, forceUpdate)
-		if err := services.RecalculateStandings(league, season); err != nil {
+		if err := services.RecalculateStandings(r.Context(), league, season); err != nil {
 			utils.CustomLog("DATABASE_ERRO", "Falha ao calcular classificação de %s: %v", league, err)
 		}
-		result, err = database.GetStandingsByLeague(league, season)
+		result, err = database.GetStandingsByLeague(r.Context(), league, season)
 	}
 
 	if err != nil {
