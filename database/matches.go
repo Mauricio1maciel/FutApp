@@ -23,6 +23,7 @@ func GetMatchesByLeague(ctx context.Context, league string, season string, f Mat
 
 	query := `
     SELECT 
+        m.id,
         COALESCE(e.espn_match_id::TEXT, 0::TEXT),  
         COALESCE(m.league, ''),
         COALESCE(l.name, ''), 
@@ -86,6 +87,7 @@ func GetMatchesByLeague(ctx context.Context, league string, season string, f Mat
 	for rows.Next() {
 		var m models.Match
 		err := rows.Scan(
+			&m.MatchID,
 			&m.IDEvent,
 			&m.League,
 			&m.LeagueName,

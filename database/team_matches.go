@@ -14,6 +14,7 @@ func GetMatchesByTeamID(ctx context.Context, teamID int64, rounds []int64) ([]mo
 
 	query := `
     SELECT 
+        m.id,
         COALESCE(e.espn_match_id::TEXT, 0::TEXT), 
         COALESCE(m.league, ''),
         COALESCE(m.season, ''),
@@ -66,6 +67,7 @@ func GetMatchesByTeamID(ctx context.Context, teamID int64, rounds []int64) ([]mo
 	for rows.Next() {
 		var m models.Match
 		err := rows.Scan(
+			&m.MatchID,
 			&m.IDEvent,
 			&m.League,
 			&m.Season,

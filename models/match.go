@@ -1,7 +1,10 @@
 package models
 
 type Match struct {
-	IDEvent    string `json:"id_event"`
+	// ID do jogo no nosso banco: estável, existe antes do jogo ter vínculo com a ESPN.
+	// É o que o app usa para seguir o jogo (/push/subscriptions).
+	MatchID    int64  `json:"match_id"`
+	IDEvent    string `json:"id_event"` // ID da ESPN ("0" enquanto não tiver vínculo)
 	League     string `json:"league"`
 	LeagueName string `json:"league_name"`
 	LeagueLogo string `json:"league_logo"`

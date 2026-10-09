@@ -54,3 +54,12 @@ func IsAdmin(r *http.Request) bool {
 	claims, _ := r.Context().Value(claimsKey).(*utils.Claims)
 	return claims.IsAdmin()
 }
+
+// DeviceID devolve o device_id do token de convidado ("" para token de admin, que não tem)
+func DeviceID(r *http.Request) string {
+	claims, _ := r.Context().Value(claimsKey).(*utils.Claims)
+	if claims == nil {
+		return ""
+	}
+	return claims.DeviceID
+}

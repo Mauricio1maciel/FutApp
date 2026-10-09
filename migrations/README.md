@@ -36,7 +36,23 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 005_tabela_users | ✅ |
 | 006_ids_proprios_selecoes_unl | ✅ |
 | 007_corrige_temporadas_e_jogos_intrusos | ✅ |
-| 008_busca_de_ligas | ⏳ |
+| 008_busca_de_ligas | ✅ |
+| 009_push_notificacoes | ⏳ |
+
+## Testes de integração
+
+Os testes de integração (notificações push, por exemplo) rodam contra um Postgres
+de verdade com as migrations aplicadas. Sem `TEST_DATABASE_URL`, o `go test` os pula.
+
+```bash
+docker run -d --name pgteste -p 55436:5432 -e POSTGRES_PASSWORD=x postgres:17
+# aplique o 000, o seed e as migrations numeradas (a 004 e a 005 dependem de
+# papéis do Supabase e podem ser puladas num Postgres comum)
+TEST_DATABASE_URL='postgres://postgres:x@localhost:55436/postgres?sslmode=disable' go test ./...
+```
+
+Os testes só aceitam banco local (`localhost`/`127.0.0.1`), porque apagam os dados
+que criam.
 
 ## Criando uma mudança nova
 

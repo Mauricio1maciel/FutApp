@@ -134,6 +134,19 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
 		}
 	}
 
+	// Aviso de escalação confirmada. O savepoint isola uma falha aqui: sem ele, o erro
+	// abortaria a transação e a escalação não seria gravada
+	if len(lineups) > 0 {
+		if _, err := tx.ExecContext(ctx, `SAVEPOINT push_lineup`); err == nil {
+			if err := enqueueLineupPush(ctx, tx, match); err != nil {
+				utils.CustomLog("DATABASE_ERRO", "Aviso de escalação do jogo %s não foi anotado: %v", match.MatchID, err)
+				tx.ExecContext(ctx, `ROLLBACK TO SAVEPOINT push_lineup`)
+			} else {
+				tx.ExecContext(ctx, `RELEASE SAVEPOINT push_lineup`)
+			}
+		}
+	}
+
 	utils.CustomLog("DATABASE", "Dados da partida %s sincronizados com sucesso!", match.MatchID)
 	return tx.Commit()
 }

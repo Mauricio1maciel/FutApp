@@ -27,6 +27,7 @@ var ActiveLogs = map[string]bool{
 	"JOBS":                   true,
 	"HTTP":                   true,
 	"STATS":                  false,
+	"PUSH":                   true,
 }
 
 func CustomLog(module string, format string, args ...interface{}) {

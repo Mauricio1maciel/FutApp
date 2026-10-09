@@ -92,11 +92,16 @@ func main() {
 	mux.HandleFunc("/matches/live", middlewares.JWTAuth(handlers.LiveMatchesHandler))
 	mux.HandleFunc("/match/history", middlewares.JWTAuth(handlers.MatchHistoryHandler))
 
+	// 🔔 NOTIFICAÇÕES PUSH: com o token de convidado (identifica o aparelho)
+	mux.HandleFunc("/push/register", middlewares.JWTAuth(handlers.PushRegisterHandler))
+	mux.HandleFunc("/push/subscriptions", middlewares.JWTAuth(handlers.PushSubscriptionsHandler))
+
 	// 🛡️ ROTAS ADMIN: usuário admin logado (/auth/login) ou header X-Admin-Key
 	mux.HandleFunc("/match_history_old", middlewares.AdminAuth(handlers.SyncPastMatchHandler))
 	mux.HandleFunc("/team/players_espn", middlewares.AdminAuth(handlers.SyncESPNTeamHandler))
 	mux.HandleFunc("/admin/sync-teams", middlewares.AdminAuth(handlers.SyncTeamsHandler))
 	mux.HandleFunc("/admin/force-sync", middlewares.AdminAuth(handlers.ForceSyncHistoryHandler))
+	mux.HandleFunc("/admin/push/test", middlewares.AdminAuth(handlers.AdminPushTestHandler))
 
 	mux.HandleFunc("/admin/sync-daily", middlewares.AdminAuth(func(w http.ResponseWriter, r *http.Request) {
 		if !worker.StartDailySync() {

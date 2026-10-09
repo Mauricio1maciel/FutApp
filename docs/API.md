@@ -27,7 +27,7 @@
 | 403 | Rota exclusiva de admin |
 | 404 | Não encontrado (jogo, time, jogador) |
 | 405 | Método errado (ex: GET no login) |
-| 409 | Ação de admin que já está rodando |
+| 409 | Ação de admin que já está rodando, ou aparelho não registrado para push |
 | 429 | Muitas tentativas de login (espere 15 min) |
 | 500 | Erro interno |
 | 502 | A API externa (ESPN/football-data) falhou numa ação de admin |
@@ -99,6 +99,19 @@ lista vem ordenada por grupo e posição.
 recente. A busca acha pelo nome, pelo código (`pl`, `bsa`) e por apelidos sem acento
 obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo").
 
+**Jogo** (`/matches`, `/team/matches`), campos principais:
+```json
+{ "match_id": 4821, "id_event": "401861080", "league": "BSA", "season": "2026",
+  "round": 30, "stage": "REGULAR_SEASON", "group_name": "",
+  "api_home_team_id": 1783, "home_team": "CR Flamengo", "home_logo": "https://...",
+  "api_away_team_id": 1769, "away_team": "SE Palmeiras", "away_logo": "https://...",
+  "home_score": 0, "away_score": 0, "date_event": "2026-10-11 21:30:00", "status": "TIMED" }
+```
+- `match_id`: ID do jogo no nosso banco. **Estável**: existe desde que o jogo é marcado.
+  É o que o app usa para seguir o jogo (notificações).
+- `id_event`: ID da ESPN, usado para abrir os detalhes (`/match/history`). Vem `"0"`
+  enquanto o jogo ainda não tem vínculo com a ESPN (comum em jogos futuros).
+
 **Time:**
 ```json
 { "id": 1, "api_id": 1783, "name": "CR Flamengo", "short": "Flamengo", "tla": "FLA",
@@ -112,6 +125,52 @@ obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo"
   "team_id": 1783, "team_name": "CR Flamengo", "headshot_url": "https://...",
   "source": "ESPN", "league": "BSA" }
 ```
+
+## Notificações push
+
+O app avisa o usuário de **início do jogo, gols, fim do jogo e escalação confirmada**
+de tudo o que ele segue: jogos (estrela no jogo) e times (estrela na tela do time,
+que vale para todos os jogos dele). A entrega é pelo Expo Push.
+
+**Use sempre o token de convidado** nestas rotas, mesmo com o admin logado: é o
+`device_id` dele que identifica o aparelho. Com o token de admin elas respondem 400.
+
+| Rota | Body / parâmetros | Resposta |
+|---|---|---|
+| `POST /push/register` | `{"token": "ExponentPushToken[...]", "platform": "android"}` | 200 `{"status": "ok"}` |
+| `DELETE /push/register` | | 200: desliga as notificações e apaga tudo o que o aparelho seguia |
+| `GET /push/subscriptions` | | 200 `{"matches": [4821], "teams": [1783]}` |
+| `POST /push/subscriptions` | um entre `{"match_id"}`, `{"espn_match_id"}` ou `{"team_id"}` | 200 `{"status": "ok", "match_id": 4821}` ou `{"status": "ok", "team_id": 1783}` |
+| `DELETE /push/subscriptions` | `?match_id=`, `?espn_match_id=` ou `?team_id=` | 200, mesmo formato do POST |
+
+- Chame o `POST /push/register` ao abrir o app (o token pode mudar). Repetir não dá erro.
+- `espn_match_id` serve para a tela de jogos ao vivo, que só conhece o ID da ESPN; a
+  resposta devolve o `match_id` correspondente. IDs podem ir como número ou texto.
+- Seguir o mesmo jogo ou time de novo não dá erro. Seguir o jogo **e** um dos times
+  dele não duplica o aviso.
+- Erros: 400 (token inválido, nenhum ou mais de um ID), 404 (jogo ou time não existe),
+  409 (aparelho ainda não registrado: chame o `POST /push/register` antes).
+
+**O que chega no celular:**
+
+| Aviso | Título | Texto |
+|---|---|---|
+| Escalação (~30 min antes) | `Escalações confirmadas 📋` | `Flamengo x Palmeiras · começa às 21:30` |
+| Início | `Começou! ⚽` | `Flamengo x Palmeiras` |
+| Gol | `⚽ GOL! Flamengo` | `Flamengo 1 x 0 Palmeiras · Pedro 23'` (autor quando a ESPN já informou) |
+| Fim | `Fim de jogo` | `Flamengo 2 x 1 Palmeiras` (pênaltis: `1 (4) x (3) 1`) |
+
+Cada notificação leva um `data` para o app abrir a tela do jogo ao ser tocada:
+```json
+{ "type": "goal", "match_id": "4821", "league": "BSA",
+  "espn_match_id": "401861080", "espn_home": "819", "espn_away": "2029",
+  "date": "2026-10-12T00:30:00Z" }
+```
+`type` é `lineup`, `start`, `goal`, `end` ou `test`. `espn_match_id`, `espn_home`,
+`espn_away` e `date` só vêm quando o backend os conhece. Todos os valores são texto.
+
+Os avisos saem do worker em até ~1 minuto depois do lance (o tempo de a ESPN atualizar
+e o worker ler). Aviso que ficar mais de 15 minutos sem sair é descartado.
 
 ## Admin
 
@@ -136,6 +195,7 @@ Com token de convidado eles são **ignorados**, e a rota responde normalmente co
 | `GET /admin/force-sync?league=BSA` | 200 `{"message", "total"}` |
 | `GET /admin/run-image-bot` | 202 `{"message"}` · 409 se já estiver rodando |
 | `GET /team/players_espn?teamID=X&league=BSA` | 200 `{"message", "team_api_id", "espn_team_id", "espn_league"}` |
+| `POST /admin/push/test` `{"device_id"}` | 200 `{"expo_status", "expo_error", "expo_message"}` · 404 aparelho não registrado · 502 Expo fora |
 
 ---
 
