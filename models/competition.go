@@ -15,10 +15,3 @@ type Winner struct {
 	Competition string
 	TeamName    string
 }
-
-type CompetitionTiebreaker struct {
-	league    string
-	season    string
-	priority  int
-	criterion int
-}

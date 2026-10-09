@@ -75,19 +75,3 @@ func GetPlayers(league string) ([]models.Player, error) {
 
 	return players, nil
 }
-
-func GetTeamPlayersBy(teamID int64, league string) ([]models.Player, error) {
-	players, err := GetPlayers(league)
-	if err != nil {
-		return nil, err
-	}
-
-	var teamPlayers []models.Player
-	for _, p := range players {
-		if int64(p.TeamID) == teamID {
-			teamPlayers = append(teamPlayers, p)
-		}
-	}
-
-	return teamPlayers, nil
-}

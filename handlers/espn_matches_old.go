@@ -32,7 +32,7 @@ func SyncPastMatchHandler(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusInternalServerError, "Falha ao baixar detalhes da ESPN")
 		return
 	}
-	err = database.SaveFullMatchHistoryold(match, lineups, events)
+	err = database.SaveFullMatchHistory(match, lineups, events)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Falha ao persistir dados no banco")
 		return

@@ -2,7 +2,6 @@ package services
 
 import (
 	"App-Futebol/models"
-	"App-Futebol/utils"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -144,43 +143,4 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 	}
 
 	return match, lineups, events, nil
-}
-
-func UpdateLiveMatchClock(match *models.ESPNMatchDB) {
-	if match == nil || match.MatchID == "" {
-		return
-	}
-
-	espnLeague := getESPNLeague(match.League)
-	scoreboardURL := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard", espnLeague)
-
-	resp, err := httpClient.Get(scoreboardURL)
-	if err != nil {
-		utils.CustomLog("ESPN_CLOCK", "Erro ao buscar scoreboard para o jogo %s: %v", match.MatchID, err)
-		return
-	}
-	defer resp.Body.Close()
-
-	var scoreboardData struct {
-		Events []struct {
-			ID     string `json:"id"`
-			Status struct {
-				DisplayClock string `json:"displayClock"`
-				Type         struct {
-					State string `json:"state"`
-				} `json:"type"`
-			} `json:"status"`
-		} `json:"events"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&scoreboardData); err == nil {
-		for _, event := range scoreboardData.Events {
-			if event.ID == match.MatchID {
-				match.Clock = event.Status.DisplayClock
-				match.Status = event.Status.Type.State
-				utils.CustomLog("ESPN_CLOCK", "⏰ Relógio atualizado para %s: %s", match.MatchID, match.Clock)
-				break
-			}
-		}
-	}
 }

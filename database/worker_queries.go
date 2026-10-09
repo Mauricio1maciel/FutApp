@@ -45,16 +45,3 @@ func GetTodayMatches() ([]models.WorkerMatch, error) {
 func GetActiveLeaguesToday() []string {
 	return []string{"BSA", "PL", "PD", "PD", "SA", "CL", "BL1", "FL1", "CLI", "CSU", "WC", "UNL"}
 }
-
-func SaveESPNMatchMapping(matchID string, homeID string, awayID string, matchDate string) error {
-	query := `
-		INSERT INTO espn_matches (espn_match_id, espn_home_team_id, espn_away_team_id, match_date)
-		VALUES ($1, $2, $3, NULLIF($4, '')::TIMESTAMP)
-		ON CONFLICT (espn_match_id) DO UPDATE SET
-			espn_home_team_id = EXCLUDED.espn_home_team_id,
-			espn_away_team_id = EXCLUDED.espn_away_team_id,
-			match_date = EXCLUDED.match_date
-	`
-	_, err := DB.Exec(query, matchID, homeID, awayID, matchDate)
-	return err
-}

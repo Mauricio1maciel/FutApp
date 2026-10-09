@@ -83,8 +83,6 @@ func SearchTeamsGlobal(query string) ([]models.Team, error) {
 }
 
 func SearchPlayersGlobal(query string) ([]models.Player, error) {
-	utils.CustomLog("DB_ERRO", " Iniciando busca de jogadores para o termo: '%s'", query)
-
 	sqlQuery := `
         WITH combined_results AS (
             SELECT 
@@ -143,7 +141,7 @@ func SearchPlayersGlobal(query string) ([]models.Player, error) {
 
 	rows, err := DB.Query(sqlQuery, query)
 	if err != nil {
-		utils.CustomLog("DB_ERRO", " ERRO SQL (Query falhou): %v\n", err)
+		utils.CustomLog("DB_ERRO", "Erro na query SearchPlayersGlobal: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -166,13 +164,11 @@ func SearchPlayersGlobal(query string) ([]models.Player, error) {
 			&p.Source,
 		)
 		if err != nil {
-			utils.CustomLog("DB_ERRO", " ERRO no Scan do jogador (Pulo para o próximo): %v\n", err)
+			utils.CustomLog("DB_ERRO", "Erro no Scan da busca de jogadores: %v", err)
 			continue
 		}
 		players = append(players, p)
 	}
-
-	utils.CustomLog("DB_ERRO", " Busca concluída. Encontrou %d jogadores.", len(players))
 
 	if players == nil {
 		players = []models.Player{}

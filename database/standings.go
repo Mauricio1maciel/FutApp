@@ -118,18 +118,3 @@ func GetStandingsByLeague(league string, season string) ([]models.Standing, erro
 	}
 	return standings, nil
 }
-
-func IsLeagueFinished(league string) bool {
-	var count int
-	query := `
-        SELECT COUNT(*) 
-        FROM matches 
-        WHERE league = $1 AND status NOT IN ('FINISHED', 'CANCELED')
-    `
-	err := DB.QueryRow(query, league).Scan(&count)
-	if err != nil {
-		return false
-	}
-
-	return count == 0
-}
