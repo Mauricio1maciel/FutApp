@@ -4,11 +4,20 @@ import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
 	"context"
+	"database/sql"
+	"fmt"
 	"log"
-	"strconv"
 )
 
-func GetMatchesByLeague(ctx context.Context, league string, roundStr string, dateStr string, season string, isCurrentRound bool) ([]models.Match, error) {
+// MatchFilter escolhe quais jogos de uma liga e temporada devolver.
+// Campo vazio (ou Round nil) não filtra. Date tem prioridade sobre Stage e Round.
+type MatchFilter struct {
+	Stage string // fase, ex: "SEMI_FINALS", "GROUP_STAGE"
+	Round *int   // rodada; nil = todas
+	Date  string // "YYYY-MM-DD", no horário de Brasília
+}
+
+func GetMatchesByLeague(ctx context.Context, league string, season string, f MatchFilter) ([]models.Match, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
@@ -50,22 +59,17 @@ func GetMatchesByLeague(ctx context.Context, league string, roundStr string, dat
     `
 	args := []interface{}{league, season}
 
-	if dateStr != "" {
-		args = append(args, dateStr)
-		query += ` AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE = $3::DATE`
-	} else if roundStr != "" {
-		if round, err := strconv.Atoi(roundStr); err == nil {
-			args = append(args, round)
-			query += ` AND m.round = $3`
-		} else {
-			args = append(args, roundStr)
-			query += ` AND m.stage = $3`
+	if f.Date != "" {
+		args = append(args, f.Date)
+		query += fmt.Sprintf(` AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE = $%d::DATE`, len(args))
+	} else {
+		if f.Stage != "" {
+			args = append(args, f.Stage)
+			query += fmt.Sprintf(` AND m.stage = $%d`, len(args))
 		}
-
-		if isCurrentRound && (league == "WC" || league == "CL" || league == "CLI") {
-			query += ` 
-               AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE
-               AND (m.match_date AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::DATE <= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE + INTERVAL '1 day'`
+		if f.Round != nil {
+			args = append(args, *f.Round)
+			query += fmt.Sprintf(` AND m.round = $%d`, len(args))
 		}
 	}
 
@@ -184,58 +188,47 @@ func SaveMatch(ctx context.Context,
 	return err
 }
 
-func GetCurrentRound(ctx context.Context, league string, season string) (int, error) {
-	ctx, cancel := withTimeout(ctx)
-	defer cancel()
-
-	var round int
-
-	query := `
-		SELECT round FROM matches 
-		WHERE league = $1 AND season = $2 
-		  AND status  IN ('TIMED')
-		  AND round > 0
-		ORDER BY match_date ASC LIMIT 1
-	`
-	err := DB.QueryRowContext(ctx, query, league, season).Scan(&round)
-
-	if err != nil {
-		queryFallback := `
-			SELECT MAX(round) FROM matches 
-			WHERE league = $1 AND season = $2
-		`
-		DB.QueryRowContext(ctx, queryFallback, league, season).Scan(&round)
-	}
-
-	if round == 0 {
-		return 1, nil
-	}
-
-	return round, nil
-}
-
-func GetCurrentPhase(ctx context.Context, league string, season string) string {
+// GetCurrentStage devolve a fase e a rodada atuais de uma liga: as do próximo jogo
+// (ou do que está rolando); se a temporada já acabou, as do último jogo.
+//
+// Jogos adiados e cancelados não contam. Um jogo "a jogar" com data de mais de um
+// dia atrás também não: é status desatualizado (ex: mata-mata da CL 2025-26) e
+// prenderia a fase atual no passado.
+//
+// Sem nenhum jogo na temporada, devolve fase vazia e rodada 0.
+func GetCurrentStage(ctx context.Context, league string, season string) (string, int, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
 	var stage string
+	var round int
+	err := DB.QueryRowContext(ctx, `
+        SELECT stage, round FROM (
+            (SELECT COALESCE(stage, '') AS stage, COALESCE(round, 0) AS round, 0 AS ordem
+               FROM matches
+              WHERE league = $1 AND season = $2
+                AND status IN ('SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED')
+                AND match_date >= NOW() - INTERVAL '1 day'
+              ORDER BY match_date ASC
+              LIMIT 1)
+            UNION ALL
+            (SELECT COALESCE(stage, ''), COALESCE(round, 0), 1
+               FROM matches
+              WHERE league = $1 AND season = $2 AND match_date IS NOT NULL
+              ORDER BY match_date DESC
+              LIMIT 1)
+        ) atual
+        ORDER BY ordem
+        LIMIT 1`, league, season).Scan(&stage, &round)
 
-	query := `
-        SELECT stage FROM matches 
-        WHERE league = $1 
-          AND season = $2
-          AND match_date >= NOW() 
-          AND stage != ''
-          AND stage NOT IN ('REGULAR_SEASON', 'GROUP_STAGE')
-        ORDER BY match_date ASC LIMIT 1
-    `
-	err := DB.QueryRowContext(ctx, query, league, season).Scan(&stage)
-
-	if err != nil {
-		return "CURRENT_ROUND"
+	if err == sql.ErrNoRows {
+		return "", 0, nil
 	}
-
-	return stage
+	if err != nil {
+		utils.CustomLog("DB_ERRO", "Erro na query GetCurrentStage: %v", err)
+		return "", 0, err
+	}
+	return stage, round, nil
 }
 
 func GetLatestSeason(ctx context.Context, league string) string {

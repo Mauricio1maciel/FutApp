@@ -71,7 +71,7 @@ func SyncFootballDataMatches(ctx context.Context, league string) error {
 // RecalculateStandings calcula a classificação a partir dos jogos do banco e salva.
 // Não chama nenhuma API externa.
 func RecalculateStandings(ctx context.Context, league, season string) error {
-	matches, err := database.GetMatchesByLeague(ctx, league, "", "", season, false)
+	matches, err := database.GetMatchesByLeague(ctx, league, season, database.MatchFilter{})
 	if err != nil {
 		return err
 	}

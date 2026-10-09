@@ -64,6 +64,20 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /details` | `api_id`, `type=team\|player` | um time ou um jogador |
 | `GET /search` | `q` | `{"leagues": [...], "teams": [...], "players": [...]}` |
 
+### `GET /matches`: quais jogos vêm
+
+| Parâmetro | Devolve |
+|---|---|
+| `round=30` (número) | a rodada 30 |
+| `round=SEMI_FINALS` (texto) | a fase inteira (valores em `stage`, ex: `GROUP_STAGE`, `QUARTER_FINALS`, `FINAL`) |
+| `date=2026-10-11` | os jogos do dia, no horário de Brasília (tem prioridade sobre `round`) |
+| nenhum dos dois | **a fase e a rodada atuais**: as do próximo jogo; se a temporada já acabou, as do último |
+
+A fase atual funciona igual para ligas e copas. Exemplos com os dados de hoje:
+`BSA` → rodada 30; `CL` → rodada 2 da fase de liga (18 jogos); `CLI` → as 4
+semifinais; `WC` (encerrada) → a final. Cada jogo traz `stage` e `round`, então o app
+sabe qual fase e rodada recebeu e pode marcar no seletor.
+
 ### Formatos
 
 **Posição na classificação** (`/standings`):

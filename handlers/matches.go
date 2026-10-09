@@ -32,24 +32,34 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 
 	season = services.ResolveSeason(r.Context(), league, season)
 
-	isCurrentRound := false
-
-	if roundStr == "" {
-		phase := database.GetCurrentPhase(r.Context(), league, season)
-
-		if phase == "CURRENT_ROUND" {
-			currentRoundInt, _ := database.GetCurrentRound(r.Context(), league, season)
-			if currentRoundInt > 38 {
-				currentRoundInt = 1
-			}
-			roundStr = strconv.Itoa(currentRoundInt)
+	filter := database.MatchFilter{Date: dateStr}
+	switch {
+	case dateStr != "":
+		// Só a data
+	case roundStr != "":
+		// O app escolheu: número = rodada, texto = fase (ex: SEMI_FINALS)
+		if n, err := strconv.Atoi(roundStr); err == nil {
+			filter.Round = &n
 		} else {
-			roundStr = phase
+			filter.Stage = roundStr
 		}
-		isCurrentRound = true
+	default:
+		// Sem round: a fase e a rodada atuais, do mesmo jeito para ligas e copas.
+		// Mata-mata (rodada 0) traz a fase inteira; liga e fase de grupos, a rodada.
+		// Sem fase gravada (temporadas antigas), filtra sempre pela rodada, para
+		// nunca devolver a temporada inteira.
+		stage, round, err := database.GetCurrentStage(r.Context(), league, season)
+		if err != nil {
+			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogos")
+			return
+		}
+		filter.Stage = stage
+		if round > 0 || stage == "" {
+			filter.Round = &round
+		}
 	}
 
-	matches, err := database.GetMatchesByLeague(r.Context(), league, roundStr, dateStr, season, isCurrentRound)
+	matches, err := database.GetMatchesByLeague(r.Context(), league, season, filter)
 	if err != nil {
 		log.Printf("Erro ao buscar jogos no banco: %v", err)
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogos")
