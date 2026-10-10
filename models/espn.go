@@ -56,7 +56,11 @@ type ESPNCompetitor struct {
 }
 
 type AppLiveMatch struct {
+	// Os dois são o ID da ESPN: esta rota vem direto da ESPN. id_event tem o mesmo
+	// nome e sentido das outras listas de jogos; match_id fica por compatibilidade
+	// (em /matches, match_id é o ID do nosso banco)
 	MatchID    string `json:"match_id"`
+	IDEvent    string `json:"id_event"`
 	LeagueName string `json:"league_name"`
 	LeagueLogo string `json:"league_logo"`
 	MatchDate  string `json:"match_date"`

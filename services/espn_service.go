@@ -66,6 +66,7 @@ func GetLiveScoreboard(leagueCode string, date string) ([]models.AppLiveMatch, e
 		comp := event.Competitions[0]
 		match := models.AppLiveMatch{
 			MatchID:    event.ID,
+			IDEvent:    event.ID,
 			LeagueName: leagueName,
 			LeagueLogo: leagueLogo,
 			MatchDate:  event.Date,

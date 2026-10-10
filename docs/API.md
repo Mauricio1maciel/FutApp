@@ -53,7 +53,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /matches` | `league`, `[season]`, `[round]`, `[date=YYYY-MM-DD]` | lista de jogos |
 | `GET /team/matches` | `id`, `[rounds=1,2,3]` | lista de jogos |
 | `GET /matches/calendar` | `leagues=BSA,PL`, `month=MM`, `year=YYYY` | `[{"date", "count"}]` |
-| `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s) |
+| `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s). Aqui `id_event` **e** `match_id` são o ID da ESPN |
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events"}` |
 | `GET /standings` | `league`, `[season]` | lista de posições |
 | `GET /seasons` | `league` | `["2026", "2025"]` |
