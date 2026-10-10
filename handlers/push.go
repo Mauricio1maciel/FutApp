@@ -100,7 +100,7 @@ func PushRegisterHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PushSubscriptionsHandler: GET lista o que o aparelho segue; POST passa a seguir um
-// jogo ou um time; DELETE deixa de seguir
+// jogo, um time ou uma liga; DELETE deixa de seguir
 func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 	device, ok := pushDevice(w, r)
 	if !ok {
@@ -109,32 +109,36 @@ func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		matches, teams, err := database.GetPushSubscriptions(r.Context(), device)
+		subs, err := database.GetPushSubscriptions(r.Context(), device)
 		if err != nil {
 			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar o que você segue")
 			return
 		}
-		utils.WriteJSON(w, http.StatusOK, map[string][]int64{"matches": matches, "teams": teams})
+		utils.WriteJSON(w, http.StatusOK, subs)
 
 	case http.MethodPost:
 		var body struct {
 			MatchID     flexID `json:"match_id"`
 			ESPNMatchID flexID `json:"espn_match_id"`
 			TeamID      flexID `json:"team_id"`
+			League      string `json:"league"`
 		}
 		if err := decodeBody(r, &body); err != nil {
 			utils.WriteError(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
-		target, ok := resolveTarget(w, r, int64(body.MatchID), int64(body.ESPNMatchID), int64(body.TeamID))
+		target, ok := resolveTarget(w, r, int64(body.MatchID), int64(body.ESPNMatchID), int64(body.TeamID), body.League)
 		if !ok {
 			return
 		}
 
 		var err error
-		if target.isTeam {
+		switch target.kind {
+		case "team":
 			err = database.SubscribeTeam(r.Context(), device, target.id)
-		} else {
+		case "league":
+			err = database.SubscribeLeague(r.Context(), device, target.league)
+		default:
 			err = database.SubscribeMatch(r.Context(), device, target.id)
 		}
 		switch {
@@ -154,15 +158,18 @@ func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 		matchID, _ := strconv.ParseInt(q.Get("match_id"), 10, 64)
 		espnID, _ := strconv.ParseInt(q.Get("espn_match_id"), 10, 64)
 		teamID, _ := strconv.ParseInt(q.Get("team_id"), 10, 64)
-		target, ok := resolveTarget(w, r, matchID, espnID, teamID)
+		target, ok := resolveTarget(w, r, matchID, espnID, teamID, q.Get("league"))
 		if !ok {
 			return
 		}
 
 		var err error
-		if target.isTeam {
+		switch target.kind {
+		case "team":
 			err = database.UnsubscribeTeam(r.Context(), device, target.id)
-		} else {
+		case "league":
+			err = database.UnsubscribeLeague(r.Context(), device, target.league)
+		default:
 			err = database.UnsubscribeMatch(r.Context(), device, target.id)
 		}
 		if err != nil {
@@ -177,41 +184,59 @@ func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type subscriptionTarget struct {
+	kind   string // match | team | league
 	id     int64
-	isTeam bool
+	league string
 }
 
 func (t subscriptionTarget) label() string {
-	if t.isTeam {
+	switch t.kind {
+	case "team":
 		return "Time"
+	case "league":
+		return "Liga"
 	}
 	return "Jogo"
 }
 
-// response devolve o ID resolvido: quem segue pelo ID da ESPN fica sabendo o match_id
+// response devolve o que foi seguido: quem segue pelo ID da ESPN fica sabendo o match_id
 func (t subscriptionTarget) response() map[string]interface{} {
-	if t.isTeam {
+	switch t.kind {
+	case "team":
 		return map[string]interface{}{"status": "ok", "team_id": t.id}
+	case "league":
+		return map[string]interface{}{"status": "ok", "league": t.league}
 	}
 	return map[string]interface{}{"status": "ok", "match_id": t.id}
 }
 
-// resolveTarget exige exatamente um entre match_id, espn_match_id e team_id e traduz o
-// ID da ESPN para o nosso match_id
-func resolveTarget(w http.ResponseWriter, r *http.Request, matchID, espnID, teamID int64) (subscriptionTarget, bool) {
+// resolveTarget exige exatamente um entre match_id, espn_match_id, team_id e league e
+// traduz o ID da ESPN para o nosso match_id
+func resolveTarget(w http.ResponseWriter, r *http.Request, matchID, espnID, teamID int64, league string) (subscriptionTarget, bool) {
+	league = strings.ToUpper(strings.TrimSpace(league))
 	informados := 0
 	for _, id := range []int64{matchID, espnID, teamID} {
 		if id > 0 {
 			informados++
 		}
 	}
+	if league != "" {
+		informados++
+	}
 	if informados != 1 {
-		utils.WriteError(w, http.StatusBadRequest, "Informe um (e só um) entre match_id, espn_match_id e team_id")
+		utils.WriteError(w, http.StatusBadRequest, "Informe um (e só um) entre match_id, espn_match_id, team_id e league")
 		return subscriptionTarget{}, false
 	}
 
-	if teamID > 0 {
-		return subscriptionTarget{id: teamID, isTeam: true}, true
+	switch {
+	case league != "":
+		if len(league) > 10 {
+			utils.WriteError(w, http.StatusNotFound, "Liga não encontrada")
+			return subscriptionTarget{}, false
+		}
+		return subscriptionTarget{kind: "league", league: league}, true
+	case teamID > 0:
+		return subscriptionTarget{kind: "team", id: teamID}, true
 	}
 
 	if espnID > 0 {
@@ -232,7 +257,7 @@ func resolveTarget(w http.ResponseWriter, r *http.Request, matchID, espnID, team
 		utils.WriteError(w, http.StatusNotFound, "Jogo não encontrado")
 		return subscriptionTarget{}, false
 	}
-	return subscriptionTarget{id: matchID}, true
+	return subscriptionTarget{kind: "match", id: matchID}, true
 }
 
 // AdminPushTestHandler manda uma notificação de teste para um aparelho:

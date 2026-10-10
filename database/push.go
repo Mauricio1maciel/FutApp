@@ -11,7 +11,8 @@ import (
 	"github.com/lib/pq"
 )
 
-// Notificações push: aparelhos, o que cada um segue e a fila de avisos (migration 009).
+// Notificações push: aparelhos, o que cada um segue (jogos, times e ligas) e a fila de
+// avisos (migrations 009 e 010).
 // O trigger trg_matches_push_outbox anota início, gol e fim; a escalação é anotada
 // aqui, por enqueueLineupPush.
 
@@ -124,6 +125,27 @@ func UnsubscribeTeam(ctx context.Context, deviceID string, teamID int64) error {
 	return err
 }
 
+// SubscribeLeague passa a seguir todos os jogos de uma liga (repetir não dá erro)
+func SubscribeLeague(ctx context.Context, deviceID string, league string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	_, err := DB.ExecContext(ctx, `
+        INSERT INTO league_subscriptions (device_id, league) VALUES ($1, $2)
+        ON CONFLICT DO NOTHING`, deviceID, league)
+	return subscriptionError(err, "league_subscriptions_device_fkey")
+}
+
+// UnsubscribeLeague deixa de seguir uma liga
+func UnsubscribeLeague(ctx context.Context, deviceID string, league string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	_, err := DB.ExecContext(ctx,
+		`DELETE FROM league_subscriptions WHERE device_id = $1 AND league = $2`, deviceID, league)
+	return err
+}
+
 // subscriptionError traduz a violação de chave estrangeira: ou o aparelho não foi
 // registrado, ou o jogo/time não existe
 func subscriptionError(err error, deviceConstraint string) error {
@@ -137,22 +159,44 @@ func subscriptionError(err error, deviceConstraint string) error {
 	return err
 }
 
-// GetPushSubscriptions devolve os jogos e os times que o aparelho segue
-func GetPushSubscriptions(ctx context.Context, deviceID string) ([]int64, []int64, error) {
+// PushSubscriptions é tudo o que um aparelho segue
+type PushSubscriptions struct {
+	Matches []int64  `json:"matches"`
+	Teams   []int64  `json:"teams"`
+	Leagues []string `json:"leagues"`
+}
+
+// GetPushSubscriptions devolve os jogos, os times e as ligas que o aparelho segue
+func GetPushSubscriptions(ctx context.Context, deviceID string) (PushSubscriptions, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	matches, err := queryIDs(ctx,
-		`SELECT match_id FROM match_subscriptions WHERE device_id = $1 ORDER BY match_id`, deviceID)
-	if err != nil {
-		return nil, nil, err
+	var subs PushSubscriptions
+	var err error
+	if subs.Matches, err = queryIDs(ctx,
+		`SELECT match_id FROM match_subscriptions WHERE device_id = $1 ORDER BY match_id`, deviceID); err != nil {
+		return subs, err
 	}
-	teams, err := queryIDs(ctx,
-		`SELECT team_api_id FROM team_subscriptions WHERE device_id = $1 ORDER BY team_api_id`, deviceID)
-	if err != nil {
-		return nil, nil, err
+	if subs.Teams, err = queryIDs(ctx,
+		`SELECT team_api_id FROM team_subscriptions WHERE device_id = $1 ORDER BY team_api_id`, deviceID); err != nil {
+		return subs, err
 	}
-	return matches, teams, nil
+
+	rows, err := DB.QueryContext(ctx,
+		`SELECT league FROM league_subscriptions WHERE device_id = $1 ORDER BY league`, deviceID)
+	if err != nil {
+		return subs, err
+	}
+	defer rows.Close()
+	subs.Leagues = []string{}
+	for rows.Next() {
+		var l string
+		if err := rows.Scan(&l); err != nil {
+			return subs, err
+		}
+		subs.Leagues = append(subs.Leagues, l)
+	}
+	return subs, rows.Err()
 }
 
 func queryIDs(ctx context.Context, query string, args ...interface{}) ([]int64, error) {
@@ -196,7 +240,8 @@ func ResolveMatchIDByESPN(ctx context.Context, espnMatchID int64) (int64, error)
 	return matchID, err
 }
 
-// GetPushTokensForMatch devolve os tokens de quem segue o jogo ou um dos times, sem repetir
+// GetPushTokensForMatch devolve os tokens de quem segue o jogo, um dos times ou a liga,
+// sem repetir
 func GetPushTokensForMatch(ctx context.Context, matchID int64) ([]string, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -211,6 +256,10 @@ func GetPushTokensForMatch(ctx context.Context, matchID int64) ([]string, error)
             FROM team_subscriptions ts
             JOIN matches m ON m.id = $1
             WHERE ts.team_api_id IN (m.api_home_team_id, m.api_away_team_id)
+            UNION
+            SELECT ls.device_id
+            FROM league_subscriptions ls
+            JOIN matches m ON m.id = $1 AND m.league = ls.league
         )`, matchID)
 	if err != nil {
 		return nil, err

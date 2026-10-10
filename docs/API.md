@@ -129,8 +129,13 @@ obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo"
 ## Notificações push
 
 O app avisa o usuário de **início do jogo, gols, fim do jogo e escalação confirmada**
-de tudo o que ele segue: jogos (estrela no jogo) e times (estrela na tela do time,
-que vale para todos os jogos dele). A entrega é pelo Expo Push.
+de tudo o que ele segue:
+- **time ou seleção** (estrela na tela do time): todos os jogos dele, em qualquer liga;
+- **liga** (estrela na tela da liga): todos os jogos da liga;
+- **jogo avulso** (estrela no jogo): só aquele jogo.
+
+Seguir mais de um caminho que leva ao mesmo jogo (ex: o time e a liga) não duplica o
+aviso. A entrega é pelo Expo Push.
 
 **Use sempre o token de convidado** nestas rotas, mesmo com o admin logado: é o
 `device_id` dele que identifica o aparelho. Com o token de admin elas respondem 400.
@@ -139,16 +144,16 @@ que vale para todos os jogos dele). A entrega é pelo Expo Push.
 |---|---|---|
 | `POST /push/register` | `{"token": "ExponentPushToken[...]", "platform": "android"}` | 200 `{"status": "ok"}` |
 | `DELETE /push/register` | | 200: desliga as notificações e apaga tudo o que o aparelho seguia |
-| `GET /push/subscriptions` | | 200 `{"matches": [4821], "teams": [1783]}` |
-| `POST /push/subscriptions` | um entre `{"match_id"}`, `{"espn_match_id"}` ou `{"team_id"}` | 200 `{"status": "ok", "match_id": 4821}` ou `{"status": "ok", "team_id": 1783}` |
-| `DELETE /push/subscriptions` | `?match_id=`, `?espn_match_id=` ou `?team_id=` | 200, mesmo formato do POST |
+| `GET /push/subscriptions` | | 200 `{"matches": [4821], "teams": [1783], "leagues": ["BSA"]}` |
+| `POST /push/subscriptions` | um entre `{"team_id"}`, `{"league"}`, `{"match_id"}` ou `{"espn_match_id"}` | 200 `{"status": "ok", "team_id": 1783}`, `{"status": "ok", "league": "BSA"}` ou `{"status": "ok", "match_id": 4821}` |
+| `DELETE /push/subscriptions` | `?team_id=`, `?league=`, `?match_id=` ou `?espn_match_id=` | 200, mesmo formato do POST |
 
 - Chame o `POST /push/register` ao abrir o app (o token pode mudar). Repetir não dá erro.
 - `espn_match_id` serve para a tela de jogos ao vivo, que só conhece o ID da ESPN; a
   resposta devolve o `match_id` correspondente. IDs podem ir como número ou texto.
-- Seguir o mesmo jogo ou time de novo não dá erro. Seguir o jogo **e** um dos times
-  dele não duplica o aviso.
-- Erros: 400 (token inválido, nenhum ou mais de um ID), 404 (jogo ou time não existe),
+- `league` é o código da liga (`BSA`, `PL`, `CLI`, `UNL`...), o mesmo das outras rotas.
+- Seguir o mesmo jogo, time ou liga de novo não dá erro.
+- Erros: 400 (token inválido, nenhum ou mais de um alvo), 404 (jogo, time ou liga não existe),
   409 (aparelho ainda não registrado: chame o `POST /push/register` antes).
 
 **O que chega no celular:**

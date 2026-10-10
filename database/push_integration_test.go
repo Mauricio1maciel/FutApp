@@ -31,6 +31,7 @@ func openTestDB(t *testing.T) {
 	mustExec(t, `INSERT INTO teams (api_id, espn_team_id, name, short) VALUES
         ($1, $3, 'Casa FC', 'Casa'), ($2, $4, 'Fora FC', 'Fora')`,
 		tstHome, tstAway, tstESPNHome, tstESPNAway)
+	mustExec(t, `INSERT INTO leagues (code_api, name) VALUES ($1, 'Liga de Teste')`, tstLeague)
 }
 
 func cleanPushTestData(t *testing.T) {
@@ -38,6 +39,7 @@ func cleanPushTestData(t *testing.T) {
 	mustExec(t, `DELETE FROM espn_matches WHERE league = $1`, tstLeague)
 	mustExec(t, `DELETE FROM push_devices WHERE device_id LIKE 'teste-push-%'`)
 	mustExec(t, `DELETE FROM teams WHERE api_id IN ($1, $2)`, tstHome, tstAway)
+	mustExec(t, `DELETE FROM leagues WHERE code_api = $1`, tstLeague)
 }
 
 func mustExec(t *testing.T, query string, args ...interface{}) {
@@ -147,6 +149,37 @@ func TestPushSeguindoTime(t *testing.T) {
 	}
 	setScore(t, m, "IN_PLAY", 0, 1)
 	assertOutbox(t, m, "start 0-1", "goal away 0-1")
+}
+
+func TestPushSeguindoLiga(t *testing.T) {
+	openTestDB(t)
+	ctx := context.Background()
+	m := newTestMatch(t, 7770013, 0, "TIMED", 0, 0)
+	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
+	if err := SubscribeLeague(ctx, "teste-push-1", tstLeague); err != nil {
+		t.Fatal(err)
+	}
+	if err := SubscribeLeague(ctx, "teste-push-1", "NAOEXISTE"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("liga inexistente: esperado ErrNotFound, veio %v", err)
+	}
+
+	setScore(t, m, "IN_PLAY", 1, 0)
+	assertOutbox(t, m, "start 1-0", "goal home 1-0")
+
+	// Seguindo a liga e o time: recebe uma vez só
+	SubscribeTeam(ctx, "teste-push-1", tstHome)
+	if tokens, _ := GetPushTokensForMatch(ctx, m); !reflect.DeepEqual(tokens, []string{"ExponentPushToken[t1]"}) {
+		t.Errorf("esperado 1 token, veio %v", tokens)
+	}
+	if subs, _ := GetPushSubscriptions(ctx, "teste-push-1"); !reflect.DeepEqual(subs.Leagues, []string{tstLeague}) {
+		t.Errorf("ligas seguidas: veio %v", subs.Leagues)
+	}
+
+	UnsubscribeLeague(ctx, "teste-push-1", tstLeague)
+	UnsubscribeTeam(ctx, "teste-push-1", tstHome)
+	if tokens, _ := GetPushTokensForMatch(ctx, m); len(tokens) != 0 {
+		t.Errorf("depois de deixar de seguir, ninguém deveria receber: %v", tokens)
+	}
 }
 
 func TestPushJogoAntigoNaoAvisa(t *testing.T) {
@@ -308,9 +341,10 @@ func TestPushInscricoes(t *testing.T) {
 		t.Errorf("esperado 2 aparelhos (sem repetir), veio %v", tokens)
 	}
 
-	matches, teams, _ := GetPushSubscriptions(ctx, "teste-push-1")
-	if !reflect.DeepEqual(matches, []int64{m}) || !reflect.DeepEqual(teams, []int64{tstHome}) {
-		t.Errorf("inscrições: veio jogos %v times %v", matches, teams)
+	subs, _ := GetPushSubscriptions(ctx, "teste-push-1")
+	if !reflect.DeepEqual(subs.Matches, []int64{m}) || !reflect.DeepEqual(subs.Teams, []int64{tstHome}) ||
+		!reflect.DeepEqual(subs.Leagues, []string{}) {
+		t.Errorf("inscrições: veio %+v", subs)
 	}
 
 	// App reinstalado: o mesmo token chega com outro device_id; o registro antigo sai

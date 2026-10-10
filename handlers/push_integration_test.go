@@ -33,11 +33,13 @@ func TestRotasPush(t *testing.T) {
 		exec(`DELETE FROM espn_matches WHERE league = 'TSH'`)
 		exec(`DELETE FROM push_devices WHERE device_id LIKE 'teste-rota-%'`)
 		exec(`DELETE FROM teams WHERE api_id IN (993001, 993002)`)
+		exec(`DELETE FROM leagues WHERE code_api = 'TSH'`)
 	}
 	limpa()
 	t.Cleanup(limpa)
 
 	exec(`INSERT INTO teams (api_id, espn_team_id, name) VALUES (993001, 883001, 'Casa FC'), (993002, 883002, 'Fora FC')`)
+	exec(`INSERT INTO leagues (code_api, name) VALUES ('TSH', 'Liga de Teste')`)
 	var m int64
 	if err := database.DB.QueryRow(`
         INSERT INTO matches (id_event, league, season, round, api_home_team_id, api_away_team_id,
@@ -89,6 +91,9 @@ func TestRotasPush(t *testing.T) {
 		{"segue o jogo", subs, "POST", "/push/subscriptions", guest, fmt.Sprintf(`{"match_id": %d}`, m), 200},
 		{"segue o mesmo jogo de novo", subs, "POST", "/push/subscriptions", guest, fmt.Sprintf(`{"match_id": "%d"}`, m), 200},
 		{"segue o time", subs, "POST", "/push/subscriptions", guest, `{"team_id": 993001}`, 200},
+		{"segue a liga (minúsculas)", subs, "POST", "/push/subscriptions", guest, `{"league": "tsh"}`, 200},
+		{"liga inexistente", subs, "POST", "/push/subscriptions", guest, `{"league": "XYZ"}`, 404},
+		{"liga e time juntos", subs, "POST", "/push/subscriptions", guest, `{"league": "TSH", "team_id": 993001}`, 400},
 		{"nenhum ID", subs, "POST", "/push/subscriptions", guest, `{}`, 400},
 		{"dois IDs", subs, "POST", "/push/subscriptions", guest, fmt.Sprintf(`{"match_id": %d, "team_id": 993001}`, m), 400},
 		{"ID que não é número", subs, "POST", "/push/subscriptions", guest, `{"match_id": "abc"}`, 400},
@@ -114,8 +119,12 @@ func TestRotasPush(t *testing.T) {
 
 	status, out = call(subs, "GET", "/push/subscriptions", guest, ``)
 	if status != 200 || !reflect.DeepEqual(out["matches"], []interface{}{float64(m)}) ||
-		!reflect.DeepEqual(out["teams"], []interface{}{float64(993001)}) {
+		!reflect.DeepEqual(out["teams"], []interface{}{float64(993001)}) ||
+		!reflect.DeepEqual(out["leagues"], []interface{}{"TSH"}) {
 		t.Errorf("lista do que segue: veio %d %v", status, out)
+	}
+	if status, out := call(subs, "DELETE", "/push/subscriptions?league=TSH", guest, ``); status != 200 || out["league"] != "TSH" {
+		t.Errorf("deixar de seguir a liga: veio %d %v", status, out)
 	}
 
 	if status, _ := call(subs, "DELETE", fmt.Sprintf("/push/subscriptions?match_id=%d", m), guest, ``); status != 200 {
