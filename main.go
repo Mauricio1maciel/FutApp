@@ -69,28 +69,32 @@ func main() {
 	mux.HandleFunc("/auth/guest", handlers.GuestAuthHandler)
 	mux.HandleFunc("/auth/login", handlers.LoginHandler)
 
-	mux.HandleFunc("/search", middlewares.JWTAuth(handlers.GlobalSearchHandler))
-	mux.HandleFunc("/details", middlewares.JWTAuth(handlers.DetailsHandler))
+	// Rotas de leitura com cache curto na memória (middlewares/cache.go): jogos e
+	// detalhes do jogo por 20s (o worker atualiza a cada minuto), classificação e
+	// calendário por 1 min, o resto (times, elencos, temporadas) por 5 a 10 min.
+	// /matches/live tem cache próprio de 30s.
+	mux.HandleFunc("/search", middlewares.JWTAuth(middlewares.CacheFor(5*time.Minute, handlers.GlobalSearchHandler)))
+	mux.HandleFunc("/details", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.DetailsHandler)))
 
-	mux.HandleFunc("/teams", middlewares.JWTAuth(handlers.TeamsHandler))
+	mux.HandleFunc("/teams", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.TeamsHandler)))
 
-	mux.HandleFunc("/seasons", middlewares.JWTAuth(handlers.SeasonsHandler))
+	mux.HandleFunc("/seasons", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.SeasonsHandler)))
 
-	mux.HandleFunc("/matches", middlewares.JWTAuth(handlers.MatchesHandler))
-	mux.HandleFunc("/team/matches", middlewares.JWTAuth(handlers.TeamMatchesHandler))
+	mux.HandleFunc("/matches", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.MatchesHandler)))
+	mux.HandleFunc("/team/matches", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.TeamMatchesHandler)))
 
-	mux.HandleFunc("/matches/calendar", middlewares.JWTAuth(handlers.CalendarHandler))
+	mux.HandleFunc("/matches/calendar", middlewares.JWTAuth(middlewares.CacheFor(time.Minute, handlers.CalendarHandler)))
 
-	mux.HandleFunc("/standings", middlewares.JWTAuth(handlers.StandingsHandler))
+	mux.HandleFunc("/standings", middlewares.JWTAuth(middlewares.CacheFor(time.Minute, handlers.StandingsHandler)))
 
-	mux.HandleFunc("/players", middlewares.JWTAuth(handlers.PlayersHandler))
+	mux.HandleFunc("/players", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.PlayersHandler)))
 
-	mux.HandleFunc("/league/stats", middlewares.JWTAuth(handlers.LeagueStatsHandler))
+	mux.HandleFunc("/league/stats", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.LeagueStatsHandler)))
 
-	mux.HandleFunc("/team/players", middlewares.JWTAuth(handlers.TeamPlayersHandler))
+	mux.HandleFunc("/team/players", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.TeamPlayersHandler)))
 
 	mux.HandleFunc("/matches/live", middlewares.JWTAuth(handlers.LiveMatchesHandler))
-	mux.HandleFunc("/match/history", middlewares.JWTAuth(handlers.MatchHistoryHandler))
+	mux.HandleFunc("/match/history", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.MatchHistoryHandler)))
 
 	// 🔔 NOTIFICAÇÕES PUSH: com o token de convidado (identifica o aparelho)
 	mux.HandleFunc("/push/register", middlewares.JWTAuth(handlers.PushRegisterHandler))

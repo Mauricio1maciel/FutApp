@@ -16,6 +16,12 @@
   - data de nascimento: `"2005-01-19"`;
   - data e hora dos jogos: string ISO vinda do banco/ESPN.
 
+- **Cache curto no servidor:** as rotas de leitura podem devolver dados com até 20s
+  (jogos, detalhes do jogo), 1 min (classificação, calendário) ou 10 min (times,
+  elencos, temporadas, artilharia) de atraso. O header `X-Cache` diz `HIT` (veio da
+  memória), `MISS` (veio do banco) ou `BYPASS` (admin, sempre fresco). Puxar para
+  atualizar mais rápido que isso não traz dado novo.
+
 ### Status usados
 
 | Status | Significado |

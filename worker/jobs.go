@@ -17,12 +17,14 @@ import (
 //   - Artilharia/assistências da ESPN: a cada 6 horas
 //   - 03:00: times e elencos da football-data, vínculo com a ESPN e elencos da ESPN
 //   - Notificações push: a fila de avisos é lida a cada 10 segundos
+//   - API do Render: /health a cada 10 minutos, para ela não dormir (API_PUBLIC_URL)
 func startDataJobs() {
 	go loopFootballDataMatches()
 	go loopMissingMatches()
 	go loopLeagueStats()
 	go loopDaily()
 	go loopPushNotifications()
+	go loopKeepAPIAwake()
 }
 
 func loopFootballDataMatches() {
