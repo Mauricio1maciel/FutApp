@@ -40,6 +40,12 @@ type ExpoMessage struct {
 	Sound    string            `json:"sound,omitempty"`
 	Priority string            `json:"priority,omitempty"`
 	TTL      int               `json:"ttl,omitempty"`
+
+	// Mesmo valor nos avisos de um jogo: o novo substitui o que já está na tela, em vez
+	// de empilhar uma notificação por gol. Tag faz isso no Android; CollapseID, no
+	// iPhone (e no Android junta as que chegam com o celular offline)
+	Tag        string `json:"tag,omitempty"`
+	CollapseID string `json:"collapseId,omitempty"`
 }
 
 // ExpoTicket é a resposta do Expo para cada mensagem, na mesma ordem do envio
@@ -185,6 +191,12 @@ func pushData(p database.PendingPush) map[string]string {
 	return data
 }
 
+// matchPushTag identifica a notificação de um jogo: escalação, início, gols e fim do
+// mesmo jogo ocupam uma notificação só, que vai sendo atualizada
+func matchPushTag(matchID int64) string {
+	return "jogo-" + strconv.FormatInt(matchID, 10)
+}
+
 // ProcessPushOutbox manda os avisos da fila. Roda no worker a cada 10 segundos.
 func ProcessPushOutbox(ctx context.Context) {
 	if n, err := database.ExpireStalePushes(ctx, pushMaxAge); err != nil {
@@ -216,10 +228,11 @@ func sendPending(ctx context.Context, p database.PendingPush) {
 
 	title, body := pushText(p)
 	data := pushData(p)
+	tag := matchPushTag(p.MatchID)
 	msgs := make([]ExpoMessage, len(tokens))
 	for i, t := range tokens {
 		msgs[i] = ExpoMessage{To: t, Title: title, Body: body, Data: data,
-			Sound: "default", Priority: "high", TTL: pushTTL}
+			Sound: "default", Priority: "high", TTL: pushTTL, Tag: tag, CollapseID: tag}
 	}
 
 	tickets, err := SendExpo(ctx, msgs)

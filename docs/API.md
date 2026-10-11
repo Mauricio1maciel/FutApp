@@ -165,6 +165,11 @@ aviso. A entrega é pelo Expo Push.
 | Gol | `⚽ GOL! Flamengo` | `Flamengo 1 x 0 Palmeiras · Pedro 23'` (autor quando a ESPN já informou) |
 | Fim | `Fim de jogo` | `Flamengo 2 x 1 Palmeiras` (pênaltis: `1 (4) x (3) 1`) |
 
+**Uma notificação por jogo:** escalação, início, gols e fim do mesmo jogo usam o mesmo
+identificador (`tag`/`collapseId` = `jogo-<match_id>`), então cada aviso novo
+**substitui** o anterior na tela em vez de empilhar. Como o texto sempre traz o placar
+atual, a notificação vira um resumo do jogo. Jogos diferentes continuam separados.
+
 Cada notificação leva um `data` para o app abrir a tela do jogo ao ser tocada:
 ```json
 { "type": "goal", "match_id": "4821", "league": "BSA",

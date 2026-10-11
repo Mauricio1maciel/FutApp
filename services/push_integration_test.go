@@ -75,6 +75,12 @@ func TestProcessPushOutboxPontaAPonta(t *testing.T) {
 	if gol[0].Data["match_id"] != strconv.FormatInt(m, 10) || gol[0].Data["type"] != "goal" {
 		t.Errorf("dados para abrir o jogo errados: %v", gol[0].Data)
 	}
+	// Início e gol do mesmo jogo: o gol substitui o início na tela
+	tag := "jogo-" + strconv.FormatInt(m, 10)
+	if inicio[0].Tag != tag || gol[0].Tag != tag || gol[0].CollapseID != tag {
+		t.Errorf("os avisos do jogo deveriam ter a tag %q, veio início %q e gol %q/%q",
+			tag, inicio[0].Tag, gol[0].Tag, gol[0].CollapseID)
+	}
 
 	var resultados []string
 	rows, _ := database.DB.Query(`SELECT result FROM push_outbox WHERE match_id = $1 ORDER BY id`, m)
