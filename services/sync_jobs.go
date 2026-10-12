@@ -94,6 +94,8 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 		standings = BuildCupStandings(matches, criteria, WorldCupFormat)
 	} else if league == "CLI" {
 		standings = BuildCupStandings(matches, criteria, LibertadoresFormat)
+	} else if league == "CSU" {
+		standings = BuildCupStandings(matches, criteria, SulAmericanaFormat)
 	} else if league == "UNL" {
 		standings = BuildUNLStandings(matches, criteria)
 	} else {

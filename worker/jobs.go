@@ -15,7 +15,8 @@ import (
 //     seguida do recálculo da classificação dessa liga
 //   - Jogos passados sem detalhes da ESPN: a cada 10 minutos
 //   - Artilharia/assistências da ESPN: a cada 6 horas
-//   - 03:00: times e elencos da football-data, vínculo com a ESPN e elencos da ESPN
+//   - 03:00: times e elencos da football-data, vínculo com a ESPN, elencos da ESPN e os
+//     próximos 14 dias das ligas que vêm só da ESPN (Sul-Americana, Liga das Nações)
 //   - Notificações push: a fila de avisos é lida a cada 10 segundos
 //   - API do Render: /health a cada 10 minutos, para ela não dormir (API_PUBLIC_URL)
 func startDataJobs() {
@@ -43,10 +44,16 @@ func loopFootballDataMatches() {
 			recalculateStandings(ctx, league)
 		}
 
-		// A UNL não vem da football-data: os jogos chegam pela ESPN (trigger),
-		// então recalcula junto com o fim de cada volta pelas ligas
+		// As ligas que vêm só da ESPN (UNL, CSU) não passam pela football-data: os
+		// jogos chegam pelo trigger, então recalcula no fim de cada volta pelas ligas
 		if index == 0 {
-			recalculateStandings(ctx, "UNL")
+			espnOnly, err := database.GetESPNOnlyLeagues(ctx)
+			if err != nil {
+				utils.CustomLog("JOBS", "Erro ao listar ligas só da ESPN: %v", err)
+			}
+			for _, l := range espnOnly {
+				recalculateStandings(ctx, l)
+			}
 		}
 	}
 }
@@ -119,7 +126,28 @@ func RunDailySync() {
 
 	services.SyncAllESPNRosters(ctx)
 
+	syncUpcomingESPNOnly(ctx)
+
 	utils.CustomLog("JOBS", "Sincronização diária finalizada!")
+}
+
+// syncUpcomingESPNOnly traz os jogos de ontem até daqui a 14 dias das ligas que vêm só
+// da ESPN. O worker só busca o placar do dia: sem isso, os próximos jogos da Sul-Americana
+// e da Liga das Nações só apareceriam no app no próprio dia (e quem segue o time não
+// veria o jogo marcado).
+func syncUpcomingESPNOnly(ctx context.Context) {
+	leagues, err := database.GetESPNOnlyLeagues(ctx)
+	if err != nil {
+		utils.CustomLog("JOBS", "Erro ao listar ligas só da ESPN: %v", err)
+		return
+	}
+	today := time.Now()
+	for _, league := range leagues {
+		for d := -1; d <= 14; d++ {
+			services.SyncESPNScoreboardForDate(ctx, league, today.AddDate(0, 0, d).Format("20060102"))
+			time.Sleep(time.Second) // Não martelar a ESPN
+		}
+	}
 }
 
 var dailySyncRunning atomic.Bool

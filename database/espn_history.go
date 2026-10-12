@@ -21,14 +21,21 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
 
 	defer tx.Rollback()
 
-	// 🔥 1. AUTO-REGISTO NA TABELA TEAMS (só UNL: a football-data não cobre a Liga das Nações,
-	// então as seleções são cadastradas com api_id = ESPNOnlyTeamIDOffset + ID da ESPN.
-	// Usar o ID da ESPN puro colidia com os IDs da football-data: o SaveTeam de um clube
-	// sobrescrevia a seleção (ex: Polônia virou Sassuolo).
+	// 🔥 1. AUTO-REGISTO NA TABELA TEAMS (só nas ligas que vêm só da ESPN, leagues.espn_only:
+	// Liga das Nações e Sul-Americana). Os times que a football-data não conhece são
+	// cadastrados com api_id = ESPNOnlyTeamIDOffset + ID da ESPN. Usar o ID da ESPN puro
+	// colidia com os IDs da football-data: o SaveTeam de um clube sobrescrevia a seleção
+	// (ex: Polônia virou Sassuolo).
 	// Nas outras ligas os times vêm da football-data e são vinculados pelo SyncESPNTeamLinks.
-	// ON CONFLICT sem alvo: ignora conflito em api_id E em espn_team_id (time já vinculado).
+	// ON CONFLICT sem alvo: ignora conflito em api_id E em espn_team_id (time já vinculado,
+	// como os brasileiros da Sul-Americana, que já existem pelo Brasileirão).
 	// Qualquer erro aqui aborta a transação no Postgres, por isso não pode ser ignorado.
-	if match.League == "UNL" {
+	var espnOnly bool
+	if err = tx.QueryRowContext(ctx,
+		`SELECT COALESCE((SELECT espn_only FROM leagues WHERE code_api = $1), false)`, match.League).Scan(&espnOnly); err != nil {
+		return err
+	}
+	if espnOnly {
 		teamQuery := `
             INSERT INTO teams (api_id, espn_team_id, name, crest_url)
             VALUES ($4::BIGINT + $1::BIGINT, $1::BIGINT, $2, $3)
@@ -49,15 +56,16 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
 				utils.CustomLog("DATABASE_ERRO", "Falha ao registrar time %d: %v", t.id, err)
 				return err
 			}
-			// Vincula à UNL (busca e detalhes exigem team_leagues). Usa o api_id do time
-			// dono do espn_team_id: seleções já cadastradas pela Copa mantêm o ID da football-data.
-			// $2 com tipo explícito: usado sem cast, o Postgres não consegue deduzir o tipo
+			// Vincula à liga (busca e detalhes exigem team_leagues). Usa o api_id do time
+			// dono do espn_team_id: quem já existe pela football-data (seleções da Copa,
+			// clubes do Brasileirão) mantém o próprio ID.
+			// $2 e $3 com tipo explícito: sem cast, o Postgres não consegue deduzir o tipo
 			if match.Season != "" {
 				if _, err = tx.ExecContext(ctx, `
                     INSERT INTO team_leagues (team_api_id, league, season)
-                    SELECT api_id, 'UNL', $2::varchar FROM teams WHERE espn_team_id = $1
-                    ON CONFLICT DO NOTHING`, t.id, match.Season); err != nil {
-					utils.CustomLog("DATABASE_ERRO", "Falha ao vincular time %d à UNL: %v", t.id, err)
+                    SELECT api_id, $3::varchar, $2::varchar FROM teams WHERE espn_team_id = $1
+                    ON CONFLICT DO NOTHING`, t.id, match.Season, match.League); err != nil {
+					utils.CustomLog("DATABASE_ERRO", "Falha ao vincular time %d à liga %s: %v", t.id, match.League, err)
 					return err
 				}
 			}

@@ -52,3 +52,51 @@ func TestBuildCupStandingsLibertadores(t *testing.T) {
 		t.Errorf("líder deveria ter 3 jogos, veio %d", s[0].Played)
 	}
 }
+
+func TestBuildCupStandingsSulAmericana(t *testing.T) {
+	matches := []models.Match{
+		groupMatch("Group A", 1, 2, 1, 0),
+		groupMatch("Group A", 1, 3, 1, 0),
+		groupMatch("Group A", 1, 4, 1, 0),
+		groupMatch("Group A", 2, 3, 1, 0),
+		groupMatch("Group A", 2, 4, 1, 0),
+		groupMatch("Group A", 3, 4, 1, 0),
+	}
+	s := BuildCupStandings(matches, nil, SulAmericanaFormat)
+
+	esperado := []string{"Classificado - Oitavas", "Playoffs (pré-oitavas)", "Eliminado", "Eliminado"}
+	for i, zona := range esperado {
+		if s[i].Zone != zona {
+			t.Errorf("%dº colocado: esperado %q, veio %q", i+1, zona, s[i].Zone)
+		}
+	}
+}
+
+func TestNormalizeESPNStage(t *testing.T) {
+	casos := map[string]string{
+		"group-stage":             "GROUP_STAGE",
+		"knockout-round-playoffs": "PLAYOFFS",
+		"round-of-16":             "LAST_16",
+		"quarterfinals":           "QUARTER_FINALS",
+		"semifinals":              "SEMI_FINALS",
+		"final":                   "FINAL",
+		"league-phase":            "league-phase", // fora da lista: fica como veio
+		"":                        "",
+	}
+	for espn, esperado := range casos {
+		if got := normalizeESPNStage(espn); got != esperado {
+			t.Errorf("%q: esperado %q, veio %q", espn, esperado, got)
+		}
+	}
+}
+
+func TestIsPlaceholderTeam(t *testing.T) {
+	for nome, esperado := range map[string]bool{
+		"TBD Home": true, "TBD Away": true, "tbd": true,
+		"Boca Juniors": false, "": false, "Tbilisi": false,
+	} {
+		if got := isPlaceholderTeam(nome); got != esperado {
+			t.Errorf("%q: esperado %v, veio %v", nome, esperado, got)
+		}
+	}
+}

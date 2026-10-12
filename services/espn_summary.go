@@ -75,7 +75,7 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		match.MatchDate = comp.Date
 		match.Status = comp.Status.Type.State
 
-		match.Stage = data.Header.Season.Slug
+		match.Stage = normalizeESPNStage(data.Header.Season.Slug)
 
 		var teamGroups []json.RawMessage
 		for _, team := range comp.Competitors {
@@ -89,6 +89,9 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 			teamLogo := ""
 			if len(team.Team.Logos) > 0 {
 				teamLogo = team.Team.Logos[0].Href
+			}
+			if isPlaceholderTeam(teamName) {
+				teamID, teamName, teamLogo = 0, "", ""
 			}
 
 			if team.HomeAway == "home" {

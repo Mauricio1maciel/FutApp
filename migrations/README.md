@@ -40,6 +40,8 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 009_push_notificacoes | ✅ |
 | 010_push_seguir_liga | ✅ |
 | 011_corrige_zona_champions_e_genoa | ✅ |
+| 012_ligas_so_da_espn | ✅ |
+| 013_remove_times_tbd_da_espn | ✅ |
 
 ## Testes de integração
 

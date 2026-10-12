@@ -17,3 +17,26 @@ func GetLeagueSeasonFormat(ctx context.Context, leagueCode string) string {
 
 	return format
 }
+
+// GetESPNOnlyLeagues devolve as ligas que vêm só da ESPN (leagues.espn_only), como a
+// Liga das Nações e a Sul-Americana
+func GetESPNOnlyLeagues(ctx context.Context) ([]string, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	rows, err := DB.QueryContext(ctx, `SELECT code_api FROM leagues WHERE espn_only ORDER BY code_api`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var leagues []string
+	for rows.Next() {
+		var l string
+		if err := rows.Scan(&l); err != nil {
+			return nil, err
+		}
+		leagues = append(leagues, l)
+	}
+	return leagues, rows.Err()
+}

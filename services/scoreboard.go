@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // SyncESPNScoreboardForLeague registra os jogos do dia de uma liga na espn_matches,
@@ -17,8 +18,19 @@ import (
 // status, grupo e fase. O summary (escalação e eventos) só é buscado para jogos
 // ao vivo ou encerrados que ainda não estão completos no banco.
 func SyncESPNScoreboardForLeague(ctx context.Context, leagueCode string) {
+	SyncESPNScoreboardForDate(ctx, leagueCode, "")
+}
+
+// SyncESPNScoreboardForDate é o SyncESPNScoreboardForLeague de um dia específico
+// (date = "20261015"; vazio = hoje). Serve para trazer os próximos jogos das ligas que
+// vêm só da ESPN e para carregar uma temporada inteira, dia a dia (a ESPN não aceita
+// período).
+func SyncESPNScoreboardForDate(ctx context.Context, leagueCode string, date string) {
 	espnLeague := getESPNLeague(leagueCode)
 	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/scoreboard", espnLeague)
+	if date != "" {
+		url += "?dates=" + date
+	}
 
 	resp, err := httpClient.Get(url)
 	if err != nil {
@@ -85,6 +97,26 @@ func SyncESPNScoreboardForLeague(ctx context.Context, leagueCode string) {
 	utils.CustomLog("WORKER_ESPN", "[%s] Scoreboard: %d jogos, %d summaries buscados", leagueCode, len(data.Events), summaries)
 }
 
+// espnStages traduz as fases da ESPN para os nomes da football-data, que o app e a
+// classificação por grupos (BuildCupStandings) já conhecem. Fase fora da lista (ex:
+// "league-phase" da Liga das Nações) fica como veio.
+var espnStages = map[string]string{
+	"first-stage":             "ROUND_1",
+	"group-stage":             "GROUP_STAGE",
+	"knockout-round-playoffs": "PLAYOFFS",
+	"round-of-16":             "LAST_16",
+	"quarterfinals":           "QUARTER_FINALS",
+	"semifinals":              "SEMI_FINALS",
+	"final":                   "FINAL",
+}
+
+func normalizeESPNStage(slug string) string {
+	if stage, ok := espnStages[slug]; ok {
+		return stage
+	}
+	return slug
+}
+
 // matchFromScoreboardEvent monta o jogo só com os dados do scoreboard (sem escalação/eventos)
 func matchFromScoreboardEvent(event models.ESPNEvent, leagueCode, season string) models.ESPNMatchDB {
 	comp := event.Competitions[0]
@@ -94,17 +126,29 @@ func matchFromScoreboardEvent(event models.ESPNEvent, leagueCode, season string)
 		Season:    season,
 		MatchDate: event.Date,
 		Status:    comp.Status.Type.State,
-		Stage:     event.Season.Slug,
+		Stage:     normalizeESPNStage(event.Season.Slug),
 		GroupName: comp.Group.Name,
 	}
 
 	for _, c := range comp.Competitors {
 		teamID, _ := strconv.ParseInt(c.Team.ID, 10, 64)
+		name, logo := c.Team.DisplayName, c.Team.Logo
+		if isPlaceholderTeam(name) {
+			teamID, name, logo = 0, "", ""
+		}
 		if c.HomeAway == "home" {
-			m.ESPNHomeTeamID, m.HomeTeam, m.HomeLogo, m.HomeScore = teamID, c.Team.DisplayName, c.Team.Logo, c.Score
+			m.ESPNHomeTeamID, m.HomeTeam, m.HomeLogo, m.HomeScore = teamID, name, logo, c.Score
 		} else {
-			m.ESPNAwayTeamID, m.AwayTeam, m.AwayLogo, m.AwayScore = teamID, c.Team.DisplayName, c.Team.Logo, c.Score
+			m.ESPNAwayTeamID, m.AwayTeam, m.AwayLogo, m.AwayScore = teamID, name, logo, c.Score
 		}
 	}
 	return m
+}
+
+// isPlaceholderTeam: em confronto ainda indefinido (ex: a final antes das semis), a ESPN
+// põe times de mentira chamados "TBD Home" / "TBD Away". Eles viram ID 0, a mesma
+// convenção da football-data para "a definir": não são cadastrados como times e o app
+// mostra "A definir".
+func isPlaceholderTeam(name string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(name)), "TBD")
 }

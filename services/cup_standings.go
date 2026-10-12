@@ -9,6 +9,7 @@ import (
 
 // CupFormat diz quem avança de cada grupo de uma copa
 type CupFormat struct {
+	SecondZone string // zona do 2º colocado (vazio = "Classificado - Oitavas", como o 1º)
 	BestThirds int    // quantos terceiros colocados (os melhores entre todos os grupos) avançam
 	ThirdZone  string // zona dos demais terceiros colocados (vazio = "Eliminado")
 }
@@ -18,6 +19,9 @@ var (
 	WorldCupFormat = CupFormat{BestThirds: 8}
 	// Libertadores: 2 primeiros às oitavas; o 3º cai para os playoffs da Sul-Americana
 	LibertadoresFormat = CupFormat{ThirdZone: "Sul-Americana"}
+	// Sul-Americana: o 1º vai direto às oitavas; o 2º joga os playoffs contra um 3º da
+	// Libertadores ("pré" no nome: o app pinta como as vagas de pré)
+	SulAmericanaFormat = CupFormat{SecondZone: "Playoffs (pré-oitavas)"}
 )
 
 // BuildCupStandings monta a classificação da fase de grupos (stage GROUP_STAGE).
@@ -88,7 +92,9 @@ func BuildCupStandings(matches []models.Match, criteria []string, format CupForm
 		for i := range allStandings[gName] {
 			team := allStandings[gName][i]
 
-			if team.Position == 1 || team.Position == 2 {
+			if team.Position == 2 && format.SecondZone != "" {
+				team.Zone = format.SecondZone
+			} else if team.Position == 1 || team.Position == 2 {
 				team.Zone = "Classificado - Oitavas"
 			} else if team.Position == 3 && bestThirds[team.TeamID] {
 				team.Zone = "Classificado - Melhor 3º"
