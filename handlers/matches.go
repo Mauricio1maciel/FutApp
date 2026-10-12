@@ -14,6 +14,7 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 
 	league := r.URL.Query().Get("league")
 	roundStr := r.URL.Query().Get("round")
+	stageStr := r.URL.Query().Get("stage")
 	dateStr := r.URL.Query().Get("date")
 	season := r.URL.Query().Get("season")
 	// Só o admin pode forçar a busca na football-data; para os demais, o worker mantém o banco atualizado
@@ -36,11 +37,15 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case dateStr != "":
 		// Só a data
-	case roundStr != "":
-		// O app escolheu: número = rodada, texto = fase (ex: SEMI_FINALS)
+	case roundStr != "" || stageStr != "":
+		// O app escolheu: round número = rodada, round texto = fase (ex: SEMI_FINALS).
+		// stage + round número juntos separam rodadas que se repetem entre fases: na
+		// Champions, round=1 é a 1ª rodada da fase de liga e também os jogos de ida do
+		// mata-mata (stage=LEAGUE_STAGE&round=1 traz só a rodada da fase de liga)
+		filter.Stage = stageStr
 		if n, err := strconv.Atoi(roundStr); err == nil {
 			filter.Round = &n
-		} else {
+		} else if roundStr != "" {
 			filter.Stage = roundStr
 		}
 	default:

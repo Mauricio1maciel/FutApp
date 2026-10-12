@@ -42,6 +42,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 011_corrige_zona_champions_e_genoa | ✅ |
 | 012_ligas_so_da_espn | ✅ |
 | 013_remove_times_tbd_da_espn | ✅ |
+| 014_regras_serie_a_ligue1_champions | ✅ |
 
 ## Testes de integração
 

@@ -56,7 +56,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 
 | Rota | Parâmetros | Resposta |
 |---|---|---|
-| `GET /matches` | `league`, `[season]`, `[round]`, `[date=YYYY-MM-DD]` | lista de jogos |
+| `GET /matches` | `league`, `[season]`, `[round]`, `[stage]`, `[date=YYYY-MM-DD]` | lista de jogos |
 | `GET /team/matches` | `id`, `[rounds=1,2,3]` | lista de jogos |
 | `GET /matches/calendar` | `leagues=BSA,PL`, `month=MM`, `year=YYYY` | `[{"date", "count"}]` |
 | `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s). Aqui `id_event` **e** `match_id` são o ID da ESPN |
@@ -75,7 +75,8 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | Parâmetro | Devolve |
 |---|---|
 | `round=30` (número) | a rodada 30 |
-| `round=SEMI_FINALS` (texto) | a fase inteira (valores em `stage`, ex: `GROUP_STAGE`, `QUARTER_FINALS`, `FINAL`) |
+| `round=SEMI_FINALS` (texto) ou `stage=SEMI_FINALS` | a fase inteira (valores em `stage`, ex: `GROUP_STAGE`, `QUARTER_FINALS`, `FINAL`) |
+| `stage=LEAGUE_STAGE&round=3` | a rodada 3 **daquela fase**. Use quando o número da rodada se repete entre fases: na Champions, `round=1` sozinho traz a 1ª rodada da fase de liga **e** os jogos de ida do mata-mata |
 | `date=2026-10-11` | os jogos do dia, no horário de Brasília (tem prioridade sobre `round`) |
 | nenhum dos dois | **a fase e a rodada atuais**: as do próximo jogo; se a temporada já acabou, as do último |
 
