@@ -39,6 +39,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 008_busca_de_ligas | ✅ |
 | 009_push_notificacoes | ✅ |
 | 010_push_seguir_liga | ✅ |
+| 011_corrige_zona_champions_e_genoa | ✅ |
 
 ## Testes de integração
 

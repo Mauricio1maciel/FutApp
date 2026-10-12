@@ -10,12 +10,17 @@ import (
 	"App-Futebol/models"
 )
 
-func GetMatchesByLeagueCode(leagueCode string) ([]models.FDMatch, error) {
+// GetMatchesByLeagueCode busca os jogos de uma liga na football-data. seasonYear é o ano
+// em que a temporada começou (2025 = 2025-2026); 0 = temporada atual.
+func GetMatchesByLeagueCode(leagueCode string, seasonYear int) ([]models.FDMatch, error) {
 
 	url := fmt.Sprintf(
 		"https://api.football-data.org/v4/competitions/%s/matches",
 		leagueCode,
 	)
+	if seasonYear > 0 {
+		url += fmt.Sprintf("?season=%d", seasonYear)
+	}
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

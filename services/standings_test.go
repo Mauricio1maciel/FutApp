@@ -48,3 +48,30 @@ func TestBuildStandingsNaoCriaTimeFantasma(t *testing.T) {
 		t.Errorf("esperado 2 times, veio %d", len(s))
 	}
 }
+
+func TestLeagueTableMatchesIgnoraMataMata(t *testing.T) {
+	fase := func(stage string, home, away int64) models.Match {
+		m := finished(home, away, 1, 0)
+		m.Stage = stage
+		return m
+	}
+	matches := []models.Match{
+		fase("LEAGUE_STAGE", 1, 2),
+		fase("REGULAR_SEASON", 1, 3),
+		fase("", 2, 3),               // gravado sem fase
+		fase("PLAYOFFS", 1, 2),       // mata-mata da Champions: não conta
+		fase("QUARTER_FINALS", 2, 3), // não conta
+		fase("FINAL", 1, 3),          // não conta
+		{APIHomeTeamID: 1, APIAwayTeamID: 99, HomeTeam: "B", Stage: "LEAGUE_STAGE"}, // time desconhecido
+	}
+
+	got := leagueTableMatches("CL", matches)
+	if len(got) != 3 {
+		t.Fatalf("esperado 3 jogos na tabela, veio %d: %+v", len(got), got)
+	}
+	for _, m := range got {
+		if m.Stage != "" && m.Stage != "REGULAR_SEASON" && m.Stage != "LEAGUE_STAGE" {
+			t.Errorf("jogo de mata-mata entrou na tabela: %s", m.Stage)
+		}
+	}
+}

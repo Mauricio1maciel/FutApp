@@ -17,7 +17,14 @@ var FootballDataLeagues = []string{"BSA", "PL", "PD", "SA", "BL1", "FL1", "CL", 
 
 // SyncFootballDataMatches baixa todos os jogos de uma liga na football-data e grava no banco
 func SyncFootballDataMatches(ctx context.Context, league string) error {
-	apiMatches, err := GetMatchesByLeagueCode(league)
+	return SyncFootballDataSeason(ctx, league, 0)
+}
+
+// SyncFootballDataSeason é o SyncFootballDataMatches de uma temporada específica
+// (seasonYear = ano em que ela começou; 0 = a atual). Serve para completar uma temporada
+// que já acabou, como a Champions 2025-26, que ficou com o mata-mata sem resultado.
+func SyncFootballDataSeason(ctx context.Context, league string, seasonYear int) error {
+	apiMatches, err := GetMatchesByLeagueCode(league, seasonYear)
 	if err != nil {
 		return err
 	}
@@ -90,20 +97,7 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 	} else if league == "UNL" {
 		standings = BuildUNLStandings(matches, criteria)
 	} else {
-		// Jogos com time fora da tabela teams (ex: IDs da ESPN gravados por engano)
-		// criariam times fantasmas e deslocariam a zona de rebaixamento
-		validMatches := make([]models.Match, 0, len(matches))
-		for _, m := range matches {
-			if m.HomeTeam == "" || m.AwayTeam == "" {
-				// ID 0 = confronto de mata-mata ainda indefinido, não é erro
-				if m.APIHomeTeamID != 0 && m.APIAwayTeamID != 0 {
-					utils.CustomLog("DATABASE_ERRO", "Jogo %s ignorado na classificação de %s: time desconhecido (%d x %d)", m.IDEvent, league, m.APIHomeTeamID, m.APIAwayTeamID)
-				}
-				continue
-			}
-			validMatches = append(validMatches, m)
-		}
-		standings = BuildStandings(validMatches, winners, rule, zones, criteria)
+		standings = BuildStandings(leagueTableMatches(league, matches), winners, rule, zones, criteria)
 	}
 
 	for i := range standings {
@@ -111,6 +105,31 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 	}
 
 	return database.ReplaceStandings(ctx, league, season, standings)
+}
+
+// leagueTableMatches separa os jogos que contam na tabela de pontos corridos
+func leagueTableMatches(league string, matches []models.Match) []models.Match {
+	valid := make([]models.Match, 0, len(matches))
+	for _, m := range matches {
+		// Na Champions, o mata-mata (PLAYOFFS, LAST_16...) não soma pontos na fase de
+		// liga. Fase vazia: jogos gravados sem fase, todos de pontos corridos
+		switch m.Stage {
+		case "", "REGULAR_SEASON", "LEAGUE_STAGE":
+		default:
+			continue
+		}
+		// Jogos com time fora da tabela teams (ex: IDs da ESPN gravados por engano)
+		// criariam times fantasmas e deslocariam a zona de rebaixamento
+		if m.HomeTeam == "" || m.AwayTeam == "" {
+			// ID 0 = confronto de mata-mata ainda indefinido, não é erro
+			if m.APIHomeTeamID != 0 && m.APIAwayTeamID != 0 {
+				utils.CustomLog("DATABASE_ERRO", "Jogo %s ignorado na classificação de %s: time desconhecido (%d x %d)", m.IDEvent, league, m.APIHomeTeamID, m.APIAwayTeamID)
+			}
+			continue
+		}
+		valid = append(valid, m)
+	}
+	return valid
 }
 
 // SyncFootballDataTeams grava os times e os elencos de uma liga da football-data
