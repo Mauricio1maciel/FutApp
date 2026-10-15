@@ -4,6 +4,8 @@ import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
 	"context"
+	"database/sql"
+	"encoding/json"
 
 	"github.com/lib/pq"
 )
@@ -75,8 +77,8 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
 	// 🔥 2. SALVAR NA ESPN_MATCHES (com pênaltis: o trigger leva para matches nas ligas
 	// que vêm só da ESPN)
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO espn_matches (espn_match_id, league, season, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name, home_penalty, away_penalty) 
-         VALUES ($1::BIGINT, $2, $3, NULLIF($4, '')::TIMESTAMP, $5, $6::BIGINT, $7, $8::BIGINT, $9, $10, $11, $12, $13, $14, $15)
+		`INSERT INTO espn_matches (espn_match_id, league, season, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name, home_penalty, away_penalty, statistics) 
+         VALUES ($1::BIGINT, $2, $3, NULLIF($4, '')::TIMESTAMP, $5, $6::BIGINT, $7, $8::BIGINT, $9, $10, $11, $12, $13, $14, $15, $16::JSONB)
          ON CONFLICT (espn_match_id) DO UPDATE 
          SET home_score = EXCLUDED.home_score,
              away_score = EXCLUDED.away_score,
@@ -91,13 +93,14 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
              stage = COALESCE(NULLIF(EXCLUDED.stage, ''), espn_matches.stage),           
              group_name = COALESCE(NULLIF(EXCLUDED.group_name, ''), espn_matches.group_name),
              home_penalty = COALESCE(EXCLUDED.home_penalty, espn_matches.home_penalty),
-             away_penalty = COALESCE(EXCLUDED.away_penalty, espn_matches.away_penalty)`,
+             away_penalty = COALESCE(EXCLUDED.away_penalty, espn_matches.away_penalty),
+             statistics = COALESCE(EXCLUDED.statistics, espn_matches.statistics)`,
 		match.MatchID, match.League, match.Season, match.MatchDate,
 		match.HomeLogo, match.ESPNHomeTeamID,
 		match.AwayLogo, match.ESPNAwayTeamID,
 		match.HomeScore, match.AwayScore, match.Status,
 		match.Stage, match.GroupName,
-		match.HomePenalty, match.AwayPenalty,
+		match.HomePenalty, match.AwayPenalty, statsJSON(match.Statistics),
 	)
 	if err != nil {
 		utils.CustomLog("DATABASE_ERRO", "Falha ao inserir partida: %v", err)
@@ -168,6 +171,8 @@ func GetFullMatchFromDB(ctx context.Context, matchID string) (*models.FullMatchH
 	defer cancel()
 
 	var history models.FullMatchHistory
+	var homePen, awayPen sql.NullInt64
+	var rawStats []byte
 
 	// 🔥 ADICIONADO O CAMPO e.season NO SELECT
 	query := `
@@ -188,7 +193,10 @@ func GetFullMatchFromDB(ctx context.Context, matchID string) (*models.FullMatchH
             COALESCE(e.away_score, ''), 
             COALESCE(e.status, ''),
             COALESCE(e.stage, ''),       
-            COALESCE(e.group_name, '')   
+            COALESCE(e.group_name, ''),
+            e.home_penalty,
+            e.away_penalty,
+            e.statistics
         FROM espn_matches e
         LEFT JOIN teams th ON e.espn_home_team_id::BIGINT = th.espn_team_id::BIGINT
         LEFT JOIN teams ta ON e.espn_away_team_id::BIGINT = ta.espn_team_id::BIGINT
@@ -214,6 +222,7 @@ func GetFullMatchFromDB(ctx context.Context, matchID string) (*models.FullMatchH
 		&history.Match.Status,
 		&history.Match.Stage,
 		&history.Match.GroupName,
+		&homePen, &awayPen, &rawStats,
 	)
 
 	if err != nil {
@@ -263,6 +272,20 @@ func GetFullMatchFromDB(ctx context.Context, matchID string) (*models.FullMatchH
 		}
 	}
 
+	if homePen.Valid && awayPen.Valid {
+		h, a := int(homePen.Int64), int(awayPen.Int64)
+		history.Match.HomePenalty, history.Match.AwayPenalty = &h, &a
+	}
+	var stats *models.MatchStatistics
+	if len(rawStats) > 0 {
+		stats = &models.MatchStatistics{}
+		if err := json.Unmarshal(rawStats, stats); err != nil {
+			utils.CustomLog("DATABASE_ERRO", "Estatísticas ilegíveis do jogo %s: %v", matchID, err)
+			stats = nil
+		}
+	}
+	history.Statistics = models.MatchStatList(stats)
+
 	if history.Lineups == nil {
 		history.Lineups = []models.ESPNLineupDB{}
 	}
@@ -289,6 +312,7 @@ func GetCompleteESPNMatchIDs(ctx context.Context, ids []int64) (map[string]bool,
 		FROM espn_matches e
 		WHERE e.espn_match_id = ANY($1)
 		  AND e.status = 'post'
+		  AND e.statistics IS NOT NULL
 		  AND EXISTS (SELECT 1 FROM espn_match_lineups l WHERE l.espn_match_id = e.espn_match_id)`,
 		pq.Array(ids))
 	if err != nil {
@@ -304,4 +328,17 @@ func GetCompleteESPNMatchIDs(ctx context.Context, ids []int64) (map[string]bool,
 		complete[id] = true
 	}
 	return complete, rows.Err()
+}
+
+// statsJSON converte as estatísticas para gravar (nil vira NULL: o banco mantém as que já
+// tinha, como na gravação só com os dados do placar)
+func statsJSON(s *models.MatchStatistics) interface{} {
+	if s == nil {
+		return nil
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return nil
+	}
+	return string(b)
 }

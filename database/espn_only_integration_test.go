@@ -93,6 +93,30 @@ func TestLigaSoDaESPNCriaJogoETimes(t *testing.T) {
 		t.Errorf("esperado pênaltis 3 x 4 e vencedor AWAY_TEAM, veio %d x %d e %q", penCasa, penFora, vencedor)
 	}
 
+	// Estatísticas: gravadas, devolvidas na lista do app e mantidas quando o placar é
+	// regravado sem elas (gravação só com os dados do scoreboard)
+	jogo.Statistics = &models.MatchStatistics{
+		Home: map[string]float64{"possessionPct": 61, "totalShots": 14},
+		Away: map[string]float64{"possessionPct": 39, "totalShots": 6},
+	}
+	if err := SaveFullMatchHistory(ctx, jogo, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	jogo.Statistics = nil
+	if err := SaveFullMatchHistory(ctx, jogo, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	full, err := GetFullMatchFromDB(ctx, "9990031")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(full.Statistics) != 2 || full.Statistics[0].Label != "Posse de bola" || full.Statistics[0].Home != 61 {
+		t.Errorf("estatísticas do jogo: veio %+v", full.Statistics)
+	}
+	if full.Match.HomePenalty == nil || *full.Match.HomePenalty != 3 {
+		t.Errorf("/match/history deveria trazer os pênaltis, veio %v", full.Match.HomePenalty)
+	}
+
 	// Liga comum (TST): a ESPN não cria jogo nem cadastra time
 	jogo.MatchID, jogo.League, jogo.ESPNAwayTeamID = "9990032", tstLeague, novoESPN+1
 	jogo.HomePenalty, jogo.AwayPenalty = nil, nil

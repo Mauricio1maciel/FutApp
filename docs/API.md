@@ -60,7 +60,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /team/matches` | `id`, `[rounds=1,2,3]` | lista de jogos |
 | `GET /matches/calendar` | `leagues=BSA,PL`, `month=MM`, `year=YYYY` | `[{"date", "count"}]` |
 | `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s). Aqui `id_event` **e** `match_id` são o ID da ESPN |
-| `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events"}` |
+| `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
 | `GET /standings` | `league`, `[season]` | lista de posições |
 | `GET /seasons` | `league` | `["2026", "2025"]` |
 | `GET /league/stats` | `league`, `[season]` | `{"top_scorers": [...], "top_assists": [...]}` |
@@ -141,6 +141,18 @@ obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo"
   É o que o app usa para seguir o jogo (notificações).
 - `id_event`: ID da ESPN, usado para abrir os detalhes (`/match/history`). Vem `"0"`
   enquanto o jogo ainda não tem vínculo com a ESPN (comum em jogos futuros).
+
+**Estatísticas do jogo** (`statistics` do `/match/history`), já em ordem para exibir:
+```json
+[ { "key": "possessionPct", "label": "Posse de bola", "home": 50.2, "away": 49.8, "unit": "%" },
+  { "key": "totalShots", "label": "Finalizações", "home": 21, "away": 10, "unit": "" } ]
+```
+Linhas possíveis, nesta ordem: posse de bola, finalizações, finalizações no gol,
+escanteios, impedimentos, faltas, cartões amarelos, cartões vermelhos, defesas do goleiro,
+passes, precisão dos passes, desarmes, interceptações. Só vêm as que a ESPN informou para
+os dois times; antes do jogo, e em jogos menores sem dados, a lista vem vazia (`[]`).
+Durante o jogo, elas são atualizadas a cada minuto, junto com o placar. O `match` também
+traz `home_penalty`/`away_penalty` quando houve disputa de pênaltis.
 
 **Time:**
 ```json

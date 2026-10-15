@@ -1,9 +1,10 @@
 package models
 
 type FullMatchHistory struct {
-	Match   ESPNMatchDB    `json:"match"`
-	Lineups []ESPNLineupDB `json:"lineups"`
-	Events  []ESPNEventDB  `json:"events"`
+	Match      ESPNMatchDB    `json:"match"`
+	Lineups    []ESPNLineupDB `json:"lineups"`
+	Events     []ESPNEventDB  `json:"events"`
+	Statistics []MatchStat    `json:"statistics"` // vazio antes do jogo ou se a ESPN não informar
 }
 
 type ESPNMatchDB struct {
@@ -30,6 +31,10 @@ type ESPNMatchDB struct {
 	APIAwayTeamID  int64  `json:"api_away_team_id"`
 	HomeTeam       string `json:"home_team"`
 	AwayTeam       string `json:"away_team"`
+
+	// Estatísticas cruas da ESPN, gravadas em espn_matches.statistics. A API devolve a
+	// lista escolhida (FullMatchHistory.Statistics), não isto
+	Statistics *MatchStatistics `json:"-"`
 }
 
 type ESPNLineupDB struct {

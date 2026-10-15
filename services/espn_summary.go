@@ -63,11 +63,18 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 	}
 
 	seasonStr := seasonFromESPN(data.Header.Season.Year, data.Header.Season.Name)
+	stats := statsFromBoxscore(data)
+	if len(data.Header.Competitions) > 0 && data.Header.Competitions[0].Status.Type.State == "pre" {
+		// Antes do jogo a ESPN pode mandar tudo zerado: o app mostraria um 0 x 0 que
+		// não aconteceu
+		stats = nil
+	}
 
 	match := models.ESPNMatchDB{
-		MatchID: matchID,
-		League:  leagueCode,
-		Season:  seasonStr,
+		MatchID:    matchID,
+		League:     leagueCode,
+		Season:     seasonStr,
+		Statistics: stats,
 	}
 
 	if len(data.Header.Competitions) > 0 {
@@ -148,4 +155,25 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 	}
 
 	return match, lineups, events, nil
+}
+
+// statsFromBoxscore lê as estatísticas de cada time (a ESPN manda o número em texto).
+// nil quando ela ainda não tem (antes do jogo) ou só tem de um time.
+func statsFromBoxscore(data models.ESPNSummaryResponse) *models.MatchStatistics {
+	stats := &models.MatchStatistics{Home: map[string]float64{}, Away: map[string]float64{}}
+	for _, team := range data.Boxscore.Teams {
+		target := stats.Away
+		if team.HomeAway == "home" {
+			target = stats.Home
+		}
+		for _, st := range team.Statistics {
+			if v, err := strconv.ParseFloat(st.DisplayValue, 64); err == nil {
+				target[st.Name] = v
+			}
+		}
+	}
+	if len(stats.Home) == 0 || len(stats.Away) == 0 {
+		return nil
+	}
+	return stats
 }

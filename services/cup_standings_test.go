@@ -127,3 +127,24 @@ func TestMatchFromScoreboardEventPenaltis(t *testing.T) {
 		t.Errorf("sem disputa, pênaltis deveriam ser nil, veio %v x %v", m.HomePenalty, m.AwayPenalty)
 	}
 }
+
+func TestStatsFromBoxscore(t *testing.T) {
+	raw := `{"boxscore": {"teams": [
+	  {"homeAway": "home", "statistics": [{"name": "possessionPct", "displayValue": "50.2"}, {"name": "totalShots", "displayValue": "21"}, {"name": "esquisito", "displayValue": "-"}]},
+	  {"homeAway": "away", "statistics": [{"name": "possessionPct", "displayValue": "49.8"}, {"name": "totalShots", "displayValue": "10"}]}]}}`
+	var data models.ESPNSummaryResponse
+	if err := json.Unmarshal([]byte(raw), &data); err != nil {
+		t.Fatal(err)
+	}
+	s := statsFromBoxscore(data)
+	if s == nil || s.Home["possessionPct"] != 50.2 || s.Away["totalShots"] != 10 {
+		t.Fatalf("leitura errada: %+v", s)
+	}
+	if _, ok := s.Home["esquisito"]; ok {
+		t.Error("valor que não é número deveria ser ignorado")
+	}
+
+	if statsFromBoxscore(models.ESPNSummaryResponse{}) != nil {
+		t.Error("sem boxscore deveria ser nil")
+	}
+}

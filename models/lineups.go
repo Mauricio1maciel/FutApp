@@ -78,6 +78,17 @@ type ESPNSummaryResponse struct {
 		} `json:"roster"`
 	} `json:"rosters"`
 
+	// Estatísticas de cada time (posse, finalizações...), com o número em texto
+	Boxscore struct {
+		Teams []struct {
+			HomeAway   string `json:"homeAway"`
+			Statistics []struct {
+				Name         string `json:"name"`
+				DisplayValue string `json:"displayValue"`
+			} `json:"statistics"`
+		} `json:"teams"`
+	} `json:"boxscore"`
+
 	KeyEvents []struct {
 		Clock struct {
 			DisplayValue string `json:"displayValue"`
