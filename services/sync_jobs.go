@@ -6,6 +6,7 @@ import (
 	"App-Futebol/utils"
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 )
@@ -106,6 +107,14 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 			// Copa só de mata-mata (ex: Copa do Brasil): não tem tabela
 			return nil
 		}
+		// Liga de pontos corridos que vem da ESPN (ex: Série B): ela não informa a rodada,
+		// então a rodada é calculada pelo calendário (services/rounds.go)
+		if espnOnly, _ := database.GetESPNOnlyLeagues(ctx); slices.Contains(espnOnly, league) {
+			// Com os jogos sem times (table não tem): eles ficam na rodada 0
+			if err := database.UpdateMatchRounds(ctx, assignLeagueRounds(regularSeason(matches))); err != nil {
+				utils.CustomLog("JOBS", "[%s] Erro ao gravar as rodadas calculadas: %v", league, err)
+			}
+		}
 		standings = BuildStandings(table, winners, rule, zones, criteria)
 		formMatches = table
 	}
@@ -154,6 +163,16 @@ func recentForm(matches []models.Match) map[int64]string {
 		}
 	}
 	return form
+}
+
+func regularSeason(matches []models.Match) []models.Match {
+	out := make([]models.Match, 0, len(matches))
+	for _, m := range matches {
+		if m.Stage == "" || m.Stage == "REGULAR_SEASON" {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 func groupStageMatches(matches []models.Match) []models.Match {

@@ -86,9 +86,9 @@ A fase atual funciona igual para ligas e copas. Exemplos com os dados de hoje:
 semifinais; `WC` (encerrada) → a final. Cada jogo traz `stage` e `round`, então o app
 sabe qual fase e rodada recebeu e pode marcar no seletor.
 
-### Ligas que vêm da ESPN: Copa do Brasil (`CDB`), Sul-Americana (`CSU`) e Liga das Nações (`UNL`)
+### Ligas que vêm da ESPN: Série B (`BSB`), Copa do Brasil (`CDB`), Sul-Americana (`CSU`) e Liga das Nações (`UNL`)
 
-A football-data não cobre essas três no plano grátis, então os jogos vêm da ESPN. Para o
+A football-data não cobre essas quatro no plano grátis, então os jogos vêm da ESPN. Para o
 app, as rotas e os formatos são os mesmos das outras ligas, com estas diferenças:
 - **Times:** os que já existem por outra liga mantêm o ID (os brasileiros da
   Sul-Americana são os mesmos do Brasileirão). Os demais têm `api_id` acima de
@@ -97,7 +97,11 @@ app, as rotas e os formatos são os mesmos das outras ligas, com estas diferenç
 - **Fases:** os mesmos nomes da Libertadores: `ROUND_1` a `ROUND_5` (fases
   preliminares), `GROUP_STAGE`, `PLAYOFFS`, `LAST_16`, `QUARTER_FINALS`, `SEMI_FINALS`,
   `FINAL`. A fase de liga da UNL continua `league-phase`.
-- **Rodada:** `round` é sempre 1. Navegue pela fase (`round=GROUP_STAGE`), não pelo número.
+- **Rodada:** nas copas, `round` é sempre 1: navegue pela fase (`round=GROUP_STAGE`).
+- **Série B:** pontos corridos como o Brasileirão (`round=1` a `38`, fase
+  `REGULAR_SEASON`). A ESPN não informa a rodada: ela é calculada pelo calendário,
+  considerando jogos adiados. Jogos ainda sem times definidos ficam com `round=0`, fora
+  das 38. Zonas: `acesso` (1º a 4º), `rebaixamento` (17º a 20º) e `neutro`.
 - **Pênaltis e vencedor:** como na football-data. Jogo decidido nos pênaltis traz
   `home_penalty`/`away_penalty`, e `winner` é `HOME_TEAM`, `AWAY_TEAM` ou `DRAW` (vazio
   enquanto o jogo não acabou).
@@ -207,7 +211,7 @@ aviso. A entrega é pelo Expo Push.
 - Chame o `POST /push/register` ao abrir o app (o token pode mudar). Repetir não dá erro.
 - `espn_match_id` serve para a tela de jogos ao vivo, que só conhece o ID da ESPN; a
   resposta devolve o `match_id` correspondente. IDs podem ir como número ou texto.
-- `league` é o código da liga (`BSA`, `PL`, `CLI`, `CSU`, `CDB`, `UNL`...), o mesmo das outras rotas.
+- `league` é o código da liga (`BSA`, `BSB`, `PL`, `CLI`, `CSU`, `CDB`, `UNL`...), o mesmo das outras rotas.
 - Seguir o mesmo jogo, time ou liga de novo não dá erro.
 - Erros: 400 (token inválido, nenhum ou mais de um alvo), 404 (jogo, time ou liga não existe),
   409 (aparelho ainda não registrado: chame o `POST /push/register` antes).

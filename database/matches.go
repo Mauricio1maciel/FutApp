@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/lib/pq"
 	"log"
 )
 
@@ -245,4 +246,26 @@ func GetLatestSeason(ctx context.Context, league string) string {
 		return "" // Sem jogos: quem chama decide (services.ResolveSeason usa a temporada de hoje)
 	}
 	return season
+}
+
+// UpdateMatchRounds grava rodadas calculadas (match_id → rodada), só onde mudou
+func UpdateMatchRounds(ctx context.Context, rounds map[int64]int) error {
+	if len(rounds) == 0 {
+		return nil
+	}
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	ids := make([]int64, 0, len(rounds))
+	values := make([]int64, 0, len(rounds))
+	for id, r := range rounds {
+		ids = append(ids, id)
+		values = append(values, int64(r))
+	}
+	_, err := DB.ExecContext(ctx, `
+        UPDATE matches m SET round = v.round
+        FROM unnest($1::int[], $2::int[]) AS v(id, round)
+        WHERE m.id = v.id AND m.round IS DISTINCT FROM v.round`,
+		pq.Array(ids), pq.Array(values))
+	return err
 }

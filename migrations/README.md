@@ -46,6 +46,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 015_copa_do_brasil_e_penaltis_espn | ✅ |
 | 016_estatisticas_do_jogo | ✅ |
 | 017_forma_recente | ✅ |
+| 018_serie_b | ✅ |
 
 ## Testes de integração
 

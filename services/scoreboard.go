@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -115,9 +116,16 @@ var espnStages = map[string]string{
 	"final":                   "FINAL",
 }
 
+// seasonSlug: liga sem fases (pontos corridos) vem com o nome da temporada no lugar da
+// fase, ex: "2026-brasileiro-serie-b"
+var seasonSlug = regexp.MustCompile(`^\d{4}(-\d{2,4})?-`)
+
 func normalizeESPNStage(slug string) string {
 	if stage, ok := espnStages[slug]; ok {
 		return stage
+	}
+	if seasonSlug.MatchString(slug) {
+		return "REGULAR_SEASON"
 	}
 	return slug
 }

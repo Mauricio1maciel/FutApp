@@ -81,6 +81,8 @@ func TestNormalizeESPNStage(t *testing.T) {
 		"quarterfinals":           "QUARTER_FINALS",
 		"semifinals":              "SEMI_FINALS",
 		"final":                   "FINAL",
+		"2026-brasileiro-serie-b": "REGULAR_SEASON", // liga sem fases: nome da temporada
+		"2025-26-english-premier": "REGULAR_SEASON",
 		"league-phase":            "league-phase", // fora da lista: fica como veio
 		"":                        "",
 	}
