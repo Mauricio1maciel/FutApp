@@ -43,6 +43,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 012_ligas_so_da_espn | ✅ |
 | 013_remove_times_tbd_da_espn | ✅ |
 | 014_regras_serie_a_ligue1_champions | ✅ |
+| 015_copa_do_brasil_e_penaltis_espn | ✅ |
 
 ## Testes de integração
 

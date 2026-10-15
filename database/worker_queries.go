@@ -50,5 +50,23 @@ func GetActiveLeaguesToday(ctx context.Context) []string {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	return []string{"BSA", "PL", "PD", "PD", "SA", "CL", "BL1", "FL1", "CLI", "CSU", "WC", "UNL"}
+	// Todas as ligas com código da ESPN. Era uma lista fixa no código, que tinha a PD
+	// repetida (o placar da La Liga era baixado duas vezes) e precisava ser editada a
+	// cada liga nova
+	rows, err := DB.QueryContext(ctx,
+		`SELECT code_api FROM leagues WHERE COALESCE(code_espn, '') <> '' ORDER BY code_api`)
+	if err != nil {
+		utils.CustomLog("DB_ERRO", "Erro ao listar ligas da ESPN: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var leagues []string
+	for rows.Next() {
+		var l string
+		if rows.Scan(&l) == nil {
+			leagues = append(leagues, l)
+		}
+	}
+	return leagues
 }

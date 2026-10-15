@@ -42,9 +42,10 @@ type ESPNSummaryResponse struct {
 				} `json:"type"`
 			} `json:"status"`
 			Competitors []struct {
-				HomeAway string `json:"homeAway"`
-				Score    string `json:"score"`
-				Team     struct {
+				HomeAway      string   `json:"homeAway"`
+				Score         string   `json:"score"`
+				ShootoutScore *float64 `json:"shootoutScore"`
+				Team          struct {
 					ID          string `json:"id"`
 					DisplayName string `json:"displayName"`
 					Logos       []struct {

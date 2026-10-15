@@ -72,10 +72,11 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
 		}
 	}
 
-	// 🔥 2. SALVAR NA ESPN_MATCHES (AGORA COM SEASON E 13 PARÂMETROS!)
+	// 🔥 2. SALVAR NA ESPN_MATCHES (com pênaltis: o trigger leva para matches nas ligas
+	// que vêm só da ESPN)
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO espn_matches (espn_match_id, league, season, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name) 
-         VALUES ($1::BIGINT, $2, $3, NULLIF($4, '')::TIMESTAMP, $5, $6::BIGINT, $7, $8::BIGINT, $9, $10, $11, $12, $13)
+		`INSERT INTO espn_matches (espn_match_id, league, season, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name, home_penalty, away_penalty) 
+         VALUES ($1::BIGINT, $2, $3, NULLIF($4, '')::TIMESTAMP, $5, $6::BIGINT, $7, $8::BIGINT, $9, $10, $11, $12, $13, $14, $15)
          ON CONFLICT (espn_match_id) DO UPDATE 
          SET home_score = EXCLUDED.home_score,
              away_score = EXCLUDED.away_score,
@@ -88,12 +89,15 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
              espn_home_team_id = EXCLUDED.espn_home_team_id,
              espn_away_team_id = EXCLUDED.espn_away_team_id,
              stage = COALESCE(NULLIF(EXCLUDED.stage, ''), espn_matches.stage),           
-             group_name = COALESCE(NULLIF(EXCLUDED.group_name, ''), espn_matches.group_name)`,
+             group_name = COALESCE(NULLIF(EXCLUDED.group_name, ''), espn_matches.group_name),
+             home_penalty = COALESCE(EXCLUDED.home_penalty, espn_matches.home_penalty),
+             away_penalty = COALESCE(EXCLUDED.away_penalty, espn_matches.away_penalty)`,
 		match.MatchID, match.League, match.Season, match.MatchDate,
 		match.HomeLogo, match.ESPNHomeTeamID,
 		match.AwayLogo, match.ESPNAwayTeamID,
 		match.HomeScore, match.AwayScore, match.Status,
 		match.Stage, match.GroupName,
+		match.HomePenalty, match.AwayPenalty,
 	)
 	if err != nil {
 		utils.CustomLog("DATABASE_ERRO", "Falha ao inserir partida: %v", err)

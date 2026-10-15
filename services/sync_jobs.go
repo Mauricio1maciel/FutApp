@@ -99,7 +99,12 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 	} else if league == "UNL" {
 		standings = BuildUNLStandings(matches, criteria)
 	} else {
-		standings = BuildStandings(leagueTableMatches(league, matches), winners, rule, zones, criteria)
+		table := leagueTableMatches(league, matches)
+		if len(table) == 0 && len(matches) > 0 {
+			// Copa só de mata-mata (ex: Copa do Brasil): não tem tabela
+			return nil
+		}
+		standings = BuildStandings(table, winners, rule, zones, criteria)
 	}
 
 	for i := range standings {

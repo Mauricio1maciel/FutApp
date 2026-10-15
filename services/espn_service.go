@@ -20,6 +20,7 @@ var ESPNLeagueMap = map[string]string{
 	"FL1": "fra.1",
 	"CLI": "conmebol.libertadores",
 	"CSU": "conmebol.sudamericana",
+	"CDB": "bra.copa_do_brazil",
 	"WC":  "fifa.world",
 	"UNL": "uefa.nations",
 }

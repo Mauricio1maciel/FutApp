@@ -47,7 +47,9 @@ type ESPNStatus struct {
 type ESPNCompetitor struct {
 	HomeAway string `json:"homeAway"`
 	Score    string `json:"score"`
-	Team     struct {
+	// Pênaltis convertidos na disputa (só existe em jogo decidido nos pênaltis)
+	ShootoutScore *float64 `json:"shootoutScore"`
+	Team          struct {
 		ID           string `json:"id"`
 		DisplayName  string `json:"displayName"`
 		Abbreviation string `json:"abbreviation"`

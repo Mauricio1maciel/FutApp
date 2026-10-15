@@ -74,8 +74,28 @@ func TestLigaSoDaESPNCriaJogoETimes(t *testing.T) {
 		t.Errorf("os dois times deveriam estar vinculados à liga, veio %d", vinculos)
 	}
 
+	// Jogo de volta decidido nos pênaltis: o mandante venceu a partida (2 x 1), mas o
+	// agregado empatou e o visitante avançou nos pênaltis. O vencedor é quem avançou,
+	// como na football-data
+	quatro, tres := 4, 3
+	jogo.Status, jogo.HomeScore, jogo.AwayScore = "post", "2", "1"
+	jogo.HomePenalty, jogo.AwayPenalty = &tres, &quatro
+	if err := SaveFullMatchHistory(ctx, jogo, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	var penCasa, penFora int
+	var vencedor string
+	if err := DB.QueryRow(`SELECT home_penalty, away_penalty, winner FROM matches
+                           WHERE league = 'TSE' AND id_event = 9990031`).Scan(&penCasa, &penFora, &vencedor); err != nil {
+		t.Fatalf("pênaltis não chegaram ao jogo: %v", err)
+	}
+	if penCasa != 3 || penFora != 4 || vencedor != "AWAY_TEAM" {
+		t.Errorf("esperado pênaltis 3 x 4 e vencedor AWAY_TEAM, veio %d x %d e %q", penCasa, penFora, vencedor)
+	}
+
 	// Liga comum (TST): a ESPN não cria jogo nem cadastra time
 	jogo.MatchID, jogo.League, jogo.ESPNAwayTeamID = "9990032", tstLeague, novoESPN+1
+	jogo.HomePenalty, jogo.AwayPenalty = nil, nil
 	if err := SaveFullMatchHistory(ctx, jogo, nil, nil); err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@ package services
 
 import (
 	"App-Futebol/models"
+	"encoding/json"
 	"testing"
 )
 
@@ -98,5 +99,31 @@ func TestIsPlaceholderTeam(t *testing.T) {
 		if got := isPlaceholderTeam(nome); got != esperado {
 			t.Errorf("%q: esperado %v, veio %v", nome, esperado, got)
 		}
+	}
+}
+
+func TestMatchFromScoreboardEventPenaltis(t *testing.T) {
+	// Formato real da ESPN (final da Champions 2025-26, decidida nos pênaltis)
+	raw := `{"id": "401862897", "date": "2026-05-30T19:00Z", "season": {"slug": "final"},
+	  "competitions": [{"status": {"type": {"state": "post"}}, "competitors": [
+	    {"homeAway": "home", "score": "1", "shootoutScore": 4, "team": {"id": "160", "displayName": "Paris Saint-Germain"}},
+	    {"homeAway": "away", "score": "1", "shootoutScore": 3, "team": {"id": "359", "displayName": "Arsenal"}}]}]}`
+	var ev models.ESPNEvent
+	if err := json.Unmarshal([]byte(raw), &ev); err != nil {
+		t.Fatal(err)
+	}
+	m := matchFromScoreboardEvent(ev, "CL", "2025-2026")
+	if m.HomePenalty == nil || m.AwayPenalty == nil || *m.HomePenalty != 4 || *m.AwayPenalty != 3 {
+		t.Fatalf("pênaltis esperados 4 x 3, veio %v x %v", m.HomePenalty, m.AwayPenalty)
+	}
+	if m.Stage != "FINAL" {
+		t.Errorf("fase esperada FINAL, veio %q", m.Stage)
+	}
+
+	// Jogo sem disputa de pênaltis: nil, para não gravar 0 x 0 de pênaltis
+	ev.Competitions[0].Competitors[0].ShootoutScore = nil
+	ev.Competitions[0].Competitors[1].ShootoutScore = nil
+	if m := matchFromScoreboardEvent(ev, "CL", "2025-2026"); m.HomePenalty != nil || m.AwayPenalty != nil {
+		t.Errorf("sem disputa, pênaltis deveriam ser nil, veio %v x %v", m.HomePenalty, m.AwayPenalty)
 	}
 }

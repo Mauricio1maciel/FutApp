@@ -99,11 +99,13 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 				match.HomeScore = team.Score
 				match.HomeTeam = teamName
 				match.HomeLogo = teamLogo
+				match.HomePenalty = shootout(team.ShootoutScore)
 			} else {
 				match.ESPNAwayTeamID = teamID
 				match.AwayScore = team.Score
 				match.AwayTeam = teamName
 				match.AwayLogo = teamLogo
+				match.AwayPenalty = shootout(team.ShootoutScore)
 			}
 		}
 	}

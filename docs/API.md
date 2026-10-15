@@ -85,20 +85,23 @@ A fase atual funciona igual para ligas e copas. Exemplos com os dados de hoje:
 semifinais; `WC` (encerrada) → a final. Cada jogo traz `stage` e `round`, então o app
 sabe qual fase e rodada recebeu e pode marcar no seletor.
 
-### Ligas que vêm da ESPN: Sul-Americana (`CSU`) e Liga das Nações (`UNL`)
+### Ligas que vêm da ESPN: Copa do Brasil (`CDB`), Sul-Americana (`CSU`) e Liga das Nações (`UNL`)
 
-A football-data não cobre essas duas no plano grátis, então os jogos vêm da ESPN. Para o
+A football-data não cobre essas três no plano grátis, então os jogos vêm da ESPN. Para o
 app, as rotas e os formatos são os mesmos das outras ligas, com estas diferenças:
 - **Times:** os que já existem por outra liga mantêm o ID (os brasileiros da
   Sul-Americana são os mesmos do Brasileirão). Os demais têm `api_id` acima de
   1.000.000.000.
 - **Grupos:** `group_name` no formato da ESPN, `"Group A"` (na Libertadores é `"GROUP_A"`).
-- **Fases:** os mesmos nomes da Libertadores: `ROUND_1`, `GROUP_STAGE`, `PLAYOFFS`,
-  `LAST_16`, `QUARTER_FINALS`, `SEMI_FINALS`, `FINAL`. A fase de liga da UNL continua
-  `league-phase`.
+- **Fases:** os mesmos nomes da Libertadores: `ROUND_1` a `ROUND_5` (fases
+  preliminares), `GROUP_STAGE`, `PLAYOFFS`, `LAST_16`, `QUARTER_FINALS`, `SEMI_FINALS`,
+  `FINAL`. A fase de liga da UNL continua `league-phase`.
 - **Rodada:** `round` é sempre 1. Navegue pela fase (`round=GROUP_STAGE`), não pelo número.
-- **Pênaltis:** a decisão por pênaltis ainda não vem nesses jogos (sem `home_penalty`/
-  `away_penalty`); um mata-mata decidido nos pênaltis aparece como empate.
+- **Pênaltis e vencedor:** como na football-data. Jogo decidido nos pênaltis traz
+  `home_penalty`/`away_penalty`, e `winner` é `HOME_TEAM`, `AWAY_TEAM` ou `DRAW` (vazio
+  enquanto o jogo não acabou).
+- **Copa do Brasil:** só mata-mata, então **não tem classificação** (`/standings`
+  devolve `[]`).
 - **Classificação da Sul-Americana:** por grupo. O 1º vai às oitavas
   (`"Classificado - Oitavas"`), o 2º joga os playoffs contra um 3º da Libertadores
   (`"Playoffs (pré-oitavas)"`), 3º e 4º são `"Eliminado"`.
@@ -178,7 +181,7 @@ aviso. A entrega é pelo Expo Push.
 - Chame o `POST /push/register` ao abrir o app (o token pode mudar). Repetir não dá erro.
 - `espn_match_id` serve para a tela de jogos ao vivo, que só conhece o ID da ESPN; a
   resposta devolve o `match_id` correspondente. IDs podem ir como número ou texto.
-- `league` é o código da liga (`BSA`, `PL`, `CLI`, `CSU`, `UNL`...), o mesmo das outras rotas.
+- `league` é o código da liga (`BSA`, `PL`, `CLI`, `CSU`, `CDB`, `UNL`...), o mesmo das outras rotas.
 - Seguir o mesmo jogo, time ou liga de novo não dá erro.
 - Erros: 400 (token inválido, nenhum ou mais de um alvo), 404 (jogo, time ou liga não existe),
   409 (aparelho ainda não registrado: chame o `POST /push/register` antes).

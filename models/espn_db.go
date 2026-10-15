@@ -15,8 +15,11 @@ type ESPNMatchDB struct {
 	AwayLogo  string `json:"away_logo"`
 	HomeScore string `json:"home_score"`
 	AwayScore string `json:"away_score"`
-	Status    string `json:"status"`
-	Clock     string `json:"clock,omitempty"`
+	// Disputa de pênaltis (nil = não houve)
+	HomePenalty *int   `json:"home_penalty,omitempty"`
+	AwayPenalty *int   `json:"away_penalty,omitempty"`
+	Status      string `json:"status"`
+	Clock       string `json:"clock,omitempty"`
 
 	Stage     string `json:"stage"`
 	GroupName string `json:"group_name"`

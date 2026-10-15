@@ -102,6 +102,11 @@ func SyncESPNScoreboardForDate(ctx context.Context, leagueCode string, date stri
 // "league-phase" da Liga das Nações) fica como veio.
 var espnStages = map[string]string{
 	"first-stage":             "ROUND_1",
+	"first-round":             "ROUND_1",
+	"second-round":            "ROUND_2",
+	"third-round":             "ROUND_3",
+	"fourth-round":            "ROUND_4",
+	"fifth-round":             "ROUND_5",
 	"group-stage":             "GROUP_STAGE",
 	"knockout-round-playoffs": "PLAYOFFS",
 	"round-of-16":             "LAST_16",
@@ -138,11 +143,22 @@ func matchFromScoreboardEvent(event models.ESPNEvent, leagueCode, season string)
 		}
 		if c.HomeAway == "home" {
 			m.ESPNHomeTeamID, m.HomeTeam, m.HomeLogo, m.HomeScore = teamID, name, logo, c.Score
+			m.HomePenalty = shootout(c.ShootoutScore)
 		} else {
 			m.ESPNAwayTeamID, m.AwayTeam, m.AwayLogo, m.AwayScore = teamID, name, logo, c.Score
+			m.AwayPenalty = shootout(c.ShootoutScore)
 		}
 	}
 	return m
+}
+
+// shootout converte os pênaltis da ESPN (número decimal, ausente se não houve disputa)
+func shootout(v *float64) *int {
+	if v == nil {
+		return nil
+	}
+	n := int(*v)
+	return &n
 }
 
 // isPlaceholderTeam: em confronto ainda indefinido (ex: a final antes das semis), a ESPN
