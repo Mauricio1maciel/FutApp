@@ -75,3 +75,31 @@ func TestLeagueTableMatchesIgnoraMataMata(t *testing.T) {
 		}
 	}
 }
+
+func TestRecentForm(t *testing.T) {
+	jogo := func(date string, home, away int64, hs, as int) models.Match {
+		m := finished(home, away, hs, as)
+		m.DateEvent = date
+		return m
+	}
+	matches := []models.Match{
+		jogo("2026-08-07 20:00:00", 1, 2, 0, 1), // 1 perde (fora de ordem de propósito)
+		jogo("2026-08-01 20:00:00", 1, 2, 2, 0), // 1 vence
+		jogo("2026-08-14 20:00:00", 3, 1, 1, 1), // empate
+		jogo("2026-08-21 20:00:00", 1, 3, 3, 0),
+		jogo("2026-08-28 20:00:00", 2, 1, 0, 2),
+		jogo("2026-09-04 20:00:00", 1, 2, 1, 1),
+	}
+	aberto := jogo("2026-09-11 20:00:00", 1, 3, 0, 0)
+	aberto.Status = "TIMED" // não jogado: não conta
+	matches = append(matches, aberto)
+
+	form := recentForm(matches)
+	// 6 jogos encerrados do time 1: V D E V V E → os últimos 5, do mais antigo ao mais novo
+	if form[1] != "DEVVE" {
+		t.Errorf("forma do time 1: esperado DEVVE, veio %q", form[1])
+	}
+	if form[2] != "DVDE" {
+		t.Errorf("forma do time 2: esperado DVDE, veio %q", form[2])
+	}
+}

@@ -57,12 +57,13 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | Rota | Parâmetros | Resposta |
 |---|---|---|
 | `GET /matches` | `league`, `[season]`, `[round]`, `[stage]`, `[date=YYYY-MM-DD]` | lista de jogos |
-| `GET /team/matches` | `id`, `[rounds=1,2,3]` | lista de jogos |
+| `GET /team/matches` | `id`, `[rounds=1,2,3]` | jogos do time na **temporada atual** de cada competição |
+| `GET /h2h` | `team1`, `team2`, `[limit=10]` | confronto direto (veja abaixo) |
 | `GET /matches/calendar` | `leagues=BSA,PL`, `month=MM`, `year=YYYY` | `[{"date", "count"}]` |
 | `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s). Aqui `id_event` **e** `match_id` são o ID da ESPN |
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
 | `GET /standings` | `league`, `[season]` | lista de posições |
-| `GET /seasons` | `league` | `["2026", "2025"]` |
+| `GET /seasons` | `league` | `["2026", "2025", "2024", "2023"]`: inclui as temporadas antigas carregadas |
 | `GET /league/stats` | `league`, `[season]` | `{"top_scorers": [...], "top_assists": [...]}` |
 | `GET /teams` | `league` | lista de times |
 | `GET /players` | `league` | lista de jogadores |
@@ -115,8 +116,10 @@ app, as rotas e os formatos são os mesmos das outras ligas, com estas diferenç
 { "position": 1, "group_name": "", "team_id": 1783, "team_name": "CR Flamengo",
   "crest_url": "https://...", "played": 28, "wins": 18, "draws": 6, "losses": 4,
   "goals_for": 55, "goals_against": 23, "goal_diff": 32, "points": 60,
-  "zone": "libertadores", "season": "2026" }
+  "zone": "libertadores", "season": "2026", "form": "VVEDV" }
 ```
+`form`: os últimos 5 resultados na competição, do mais antigo para o mais recente
+(`V` vitória, `E` empate, `D` derrota). Tem menos letras no começo da temporada.
 Em copas e na Liga das Nações, `group_name` vem preenchido (ex: `"Group C1"`) e a
 lista vem ordenada por grupo e posição.
 
@@ -153,6 +156,17 @@ passes, precisão dos passes, desarmes, interceptações. Só vêm as que a ESPN
 os dois times; antes do jogo, e em jogos menores sem dados, a lista vem vazia (`[]`).
 Durante o jogo, elas são atualizadas a cada minuto, junto com o placar. O `match` também
 traz `home_penalty`/`away_penalty` quando houve disputa de pênaltis.
+
+**Confronto direto** (`/h2h?team1=1783&team2=1769`): todos os jogos já encerrados
+entre os dois, em qualquer competição e temporada que o banco tem.
+```json
+{ "team1": 1783, "team2": 1769,
+  "summary": { "played": 7, "team1_wins": 3, "draws": 2, "team2_wins": 2,
+               "team1_goals": 9, "team2_goals": 8 },
+  "matches": [ ...jogos no formato de /matches, do mais recente para o mais antigo... ] }
+```
+O `summary` conta todos os jogos; `matches` traz até `limit` (padrão 10, máximo 50).
+Decisão por pênaltis conta como empate no resumo.
 
 **Time:**
 ```json
@@ -247,6 +261,7 @@ Com token de convidado eles são **ignorados**, e a rota responde normalmente co
 | `GET /admin/force-sync?league=BSA` | 200 `{"message", "total"}` |
 | `GET /admin/run-image-bot` | 202 `{"message"}` · 409 se já estiver rodando |
 | `GET /team/players_espn?teamID=X&league=BSA` | 200 `{"message", "team_api_id", "espn_team_id", "espn_league"}` |
+| `POST /admin/sync-season?league=BSA&season=2024` | 202: carrega uma temporada antiga (times, jogos e classificação) em background · 409 se outra estiver carregando |
 | `POST /admin/push/test` `{"device_id"}` | 200 `{"expo_status", "expo_error", "expo_message"}` · 404 aparelho não registrado · 502 Expo fora |
 
 ---

@@ -32,7 +32,7 @@ func TeamsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teams, err := services.GetTeams(league)
+	teams, err := services.GetTeams(league, 0)
 	if err != nil {
 		utils.WriteError(w, http.StatusBadGateway, "Erro ao buscar times na football-data")
 		return

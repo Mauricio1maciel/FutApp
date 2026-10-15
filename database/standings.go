@@ -30,8 +30,8 @@ func ReplaceStandings(ctx context.Context, league string, season string, standin
 	for _, s := range standings {
 		_, err := tx.ExecContext(ctx, `
             INSERT INTO standings
-            (league, position, team_id, played, wins, draws, losses, goals_for, goals_against, goal_diff, points, zone, season, group_name)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+            (league, position, team_id, played, wins, draws, losses, goals_for, goals_against, goal_diff, points, zone, season, group_name, form)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
         `,
 			league,
 			s.Position,
@@ -47,6 +47,7 @@ func ReplaceStandings(ctx context.Context, league string, season string, standin
 			s.Zone,
 			season,
 			s.GroupName,
+			s.Form,
 		)
 
 		if err != nil {
@@ -78,7 +79,8 @@ func GetStandingsByLeague(ctx context.Context, league string, season string) ([]
         COALESCE(s.season, ''),
         COALESCE(t.crest_url, ''),
         COALESCE(s.zone, ''),
-        COALESCE(s.group_name, '')
+        COALESCE(s.group_name, ''),
+        COALESCE(s.form, '')
     FROM standings s
     LEFT JOIN teams t ON s.team_id = t.api_id
     WHERE s.league = $1 AND s.season = $2
@@ -112,6 +114,7 @@ func GetStandingsByLeague(ctx context.Context, league string, season string) ([]
 			&s.CrestURL,
 			&s.Zone,
 			&s.GroupName,
+			&s.Form,
 		)
 
 		if err != nil {

@@ -20,12 +20,17 @@ type FDTeamsResponse struct {
 	} `json:"teams"`
 }
 
-func GetTeams(league string) ([]models.Team, error) {
+// GetTeams busca os times de uma liga na football-data. seasonYear é o ano em que a
+// temporada começou; 0 = temporada atual.
+func GetTeams(league string, seasonYear int) ([]models.Team, error) {
 
 	url := fmt.Sprintf(
 		"https://api.football-data.org/v4/competitions/%s/teams",
 		league,
 	)
+	if seasonYear > 0 {
+		url += fmt.Sprintf("?season=%d", seasonYear)
+	}
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

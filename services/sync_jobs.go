@@ -6,6 +6,7 @@ import (
 	"App-Futebol/utils"
 	"context"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -90,12 +91,13 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 
 	var standings []models.Standing
 
-	if league == "WC" {
-		standings = BuildCupStandings(matches, criteria, WorldCupFormat)
-	} else if league == "CLI" {
-		standings = BuildCupStandings(matches, criteria, LibertadoresFormat)
-	} else if league == "CSU" {
-		standings = BuildCupStandings(matches, criteria, SulAmericanaFormat)
+	// Jogos que formam a tabela: a forma recente usa os mesmos
+	formMatches := matches
+
+	if league == "WC" || league == "CLI" || league == "CSU" {
+		format := map[string]CupFormat{"WC": WorldCupFormat, "CLI": LibertadoresFormat, "CSU": SulAmericanaFormat}[league]
+		standings = BuildCupStandings(matches, criteria, format)
+		formMatches = groupStageMatches(matches)
 	} else if league == "UNL" {
 		standings = BuildUNLStandings(matches, criteria)
 	} else {
@@ -105,13 +107,63 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 			return nil
 		}
 		standings = BuildStandings(table, winners, rule, zones, criteria)
+		formMatches = table
 	}
+
+	form := recentForm(formMatches)
 
 	for i := range standings {
 		standings[i].Season = season
+		standings[i].Form = form[standings[i].TeamID]
 	}
 
 	return database.ReplaceStandings(ctx, league, season, standings)
+}
+
+// recentForm devolve os últimos 5 resultados de cada time ("VVEDV", do mais antigo para
+// o mais recente). Pênaltis não contam: o jogo terminou empatado.
+func recentForm(matches []models.Match) map[int64]string {
+	finished := make([]models.Match, 0, len(matches))
+	for _, m := range matches {
+		if m.Status == "FINISHED" {
+			finished = append(finished, m)
+		}
+	}
+	// DateEvent vem do banco como "2026-10-11 21:30:00": a ordem do texto é a da data
+	sort.SliceStable(finished, func(i, j int) bool { return finished[i].DateEvent < finished[j].DateEvent })
+
+	form := map[int64]string{}
+	add := func(team int64, r string) {
+		f := form[team] + r
+		if len(f) > 5 {
+			f = f[len(f)-5:]
+		}
+		form[team] = f
+	}
+	for _, m := range finished {
+		switch {
+		case m.HomeScore > m.AwayScore:
+			add(m.APIHomeTeamID, "V")
+			add(m.APIAwayTeamID, "D")
+		case m.HomeScore < m.AwayScore:
+			add(m.APIHomeTeamID, "D")
+			add(m.APIAwayTeamID, "V")
+		default:
+			add(m.APIHomeTeamID, "E")
+			add(m.APIAwayTeamID, "E")
+		}
+	}
+	return form
+}
+
+func groupStageMatches(matches []models.Match) []models.Match {
+	group := make([]models.Match, 0, len(matches))
+	for _, m := range matches {
+		if m.Stage == "GROUP_STAGE" {
+			group = append(group, m)
+		}
+	}
+	return group
 }
 
 // leagueTableMatches separa os jogos que contam na tabela de pontos corridos
@@ -139,11 +191,32 @@ func leagueTableMatches(league string, matches []models.Match) []models.Match {
 	return valid
 }
 
+// SyncFootballDataHistory carrega uma temporada antiga da football-data (times e jogos) e
+// calcula a classificação dela. Serve ao confronto direto e ao histórico de temporadas.
+// Os times entram sem sobrescrever os que já existem: nome e escudo atuais ficam.
+func SyncFootballDataHistory(ctx context.Context, league string, seasonYear int) error {
+	teams, err := GetTeams(league, seasonYear)
+	if err != nil {
+		return fmt.Errorf("times: %w", err)
+	}
+	format := database.GetLeagueSeasonFormat(ctx, league)
+	season := SeasonFromDate(fmt.Sprintf("%d-08-01T00:00:00Z", seasonYear), format)
+	for _, t := range teams {
+		database.SaveHistoricalTeam(ctx, int64(t.ID), t.Name, t.Short, t.TLA, league, t.Stadium, t.Crest, season)
+	}
+
+	time.Sleep(7 * time.Second) // limite de 10 chamadas por minuto do plano grátis
+	if err := SyncFootballDataSeason(ctx, league, seasonYear); err != nil {
+		return fmt.Errorf("jogos: %w", err)
+	}
+	return RecalculateStandings(ctx, league, season)
+}
+
 // SyncFootballDataTeams grava os times e os elencos de uma liga da football-data
 func SyncFootballDataTeams(ctx context.Context, league string) error {
 	season := CurrentSeason(ctx, league)
 
-	teams, err := GetTeams(league)
+	teams, err := GetTeams(league, 0)
 	if err != nil {
 		return fmt.Errorf("times: %w", err)
 	}

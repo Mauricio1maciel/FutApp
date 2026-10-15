@@ -16,4 +16,6 @@ type Standing struct {
 	CrestURL     string `json:"crest_url"`
 	Zone         string `json:"zone"`
 	Season       string `json:"season"`
+	// Últimos 5 resultados na competição, do mais antigo para o mais recente: V, E ou D
+	Form string `json:"form"`
 }

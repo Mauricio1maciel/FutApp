@@ -22,6 +22,10 @@ func GetMissingMatches(ctx context.Context, league string) ([]map[string]string,
         WHERE m.league = $1
           AND m.status = 'FINISHED'
           AND e.espn_match_id IS NULL
+          -- Só a temporada atual: o banco também guarda temporadas antigas (confronto
+          -- direto), e buscar a escalação de cada jogo antigo na ESPN levaria dias
+          AND m.season = (SELECT max(season) FROM matches
+                          WHERE league = $1 AND COALESCE(season, '') <> '')
         ORDER BY m.match_date DESC
         LIMIT 10`
 

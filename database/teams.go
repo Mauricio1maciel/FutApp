@@ -101,3 +101,21 @@ func SaveTeam(ctx context.Context, apiID int64, name string, short string, tla s
 
 	return err
 }
+
+// SaveHistoricalTeam cadastra um time de temporada antiga e o vincula à liga naquela
+// temporada, sem mexer no time se ele já existe (o nome e o escudo atuais ficam)
+func SaveHistoricalTeam(ctx context.Context, apiID int64, name, short, tla, league, stadium, crest, season string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	if _, err := DB.ExecContext(ctx, `
+        INSERT INTO teams (api_id, name, short, tla, stadium, crest_url)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT DO NOTHING`, apiID, name, short, tla, stadium, crest); err != nil {
+		return err
+	}
+	_, err := DB.ExecContext(ctx, `
+        INSERT INTO team_leagues (team_api_id, league, season) VALUES ($1, $2, $3)
+        ON CONFLICT DO NOTHING`, apiID, league, season)
+	return err
+}

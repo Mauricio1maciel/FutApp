@@ -95,6 +95,7 @@ func main() {
 
 	mux.HandleFunc("/matches/live", middlewares.JWTAuth(handlers.LiveMatchesHandler))
 	mux.HandleFunc("/match/history", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.MatchHistoryHandler)))
+	mux.HandleFunc("/h2h", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.HeadToHeadHandler)))
 
 	// 🔔 NOTIFICAÇÕES PUSH: com o token de convidado (identifica o aparelho)
 	mux.HandleFunc("/push/register", middlewares.JWTAuth(handlers.PushRegisterHandler))
@@ -106,6 +107,7 @@ func main() {
 	mux.HandleFunc("/admin/sync-teams", middlewares.AdminAuth(handlers.SyncTeamsHandler))
 	mux.HandleFunc("/admin/force-sync", middlewares.AdminAuth(handlers.ForceSyncHistoryHandler))
 	mux.HandleFunc("/admin/push/test", middlewares.AdminAuth(handlers.AdminPushTestHandler))
+	mux.HandleFunc("/admin/sync-season", middlewares.AdminAuth(handlers.AdminSyncSeasonHandler))
 
 	mux.HandleFunc("/admin/sync-daily", middlewares.AdminAuth(func(w http.ResponseWriter, r *http.Request) {
 		if !worker.StartDailySync() {
