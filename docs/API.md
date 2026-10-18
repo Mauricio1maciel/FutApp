@@ -22,6 +22,16 @@
   memória), `MISS` (veio do banco) ou `BYPASS` (admin, sempre fresco). Puxar para
   atualizar mais rápido que isso não traz dado novo.
 
+### Alerta de tamanho do banco
+
+O plano grátis do Supabase vai até 500 MB; acima disso o banco fica só leitura. O worker
+mede o banco ao subir e todo dia ao meio-dia, e manda um push (`type: "admin_alert"`,
+`alert: "db_size"`) para os aparelhos de admin quando passa de `DB_SIZE_ALERT_MB` (padrão
+300) e a cada 50 MB a mais. Cada nível avisa uma vez só. O aparelho de admin é o que
+tocou em "Enviar push de teste para este aparelho" na tela de admin; se o app for
+reinstalado, é preciso tocar de novo. `DB_SIZE_LIMIT_MB` (padrão 500) muda o limite,
+caso o plano mude.
+
 ### Status usados
 
 | Status | Significado |
@@ -236,7 +246,7 @@ Cada notificação leva um `data` para o app abrir a tela do jogo ao ser tocada:
   "espn_match_id": "401861080", "espn_home": "819", "espn_away": "2029",
   "date": "2026-10-12T00:30:00Z" }
 ```
-`type` é `lineup`, `start`, `goal`, `end` ou `test`. `espn_match_id`, `espn_home`,
+`type` é `lineup`, `start`, `goal`, `end`, `test` ou `admin_alert`. `espn_match_id`, `espn_home`,
 `espn_away` e `date` só vêm quando o backend os conhece. Todos os valores são texto.
 
 Os avisos saem do worker em até ~1 minuto depois do lance (o tempo de a ESPN atualizar
@@ -266,7 +276,8 @@ Com token de convidado eles são **ignorados**, e a rota responde normalmente co
 | `GET /admin/run-image-bot` | 202 `{"message"}` · 409 se já estiver rodando |
 | `GET /team/players_espn?teamID=X&league=BSA` | 200 `{"message", "team_api_id", "espn_team_id", "espn_league"}` |
 | `POST /admin/sync-season?league=BSA&season=2024` | 202: carrega uma temporada antiga (times, jogos e classificação) em background · 409 se outra estiver carregando |
-| `POST /admin/push/test` `{"device_id"}` | 200 `{"expo_status", "expo_error", "expo_message"}` · 404 aparelho não registrado · 502 Expo fora |
+| `POST /admin/push/test` `{"device_id"}` | 200 `{"expo_status", "expo_error", "expo_message", "admin_alerts"}` · 404 aparelho não registrado · 502 Expo fora. Com o envio aceito, o aparelho passa a receber os **alertas do servidor** (`admin_alerts: "ativado"`) |
+| `GET /admin/db-size` | `{"size_mb", "limit_mb", "percent", "alert_mb", "tables": [{"name", "size_mb"}]}`: tamanho do banco e as 10 maiores tabelas |
 
 ---
 

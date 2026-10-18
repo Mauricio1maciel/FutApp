@@ -142,8 +142,14 @@ func TestRotasPush(t *testing.T) {
 	t.Setenv("EXPO_PUSH_URL", expo.URL)
 
 	status, out = call(pushTest, "POST", "/admin/push/test", "", `{"device_id": "teste-rota-1"}`, "X-Admin-Key", "chave-de-teste")
-	if status != 200 || out["expo_status"] != "ok" {
-		t.Errorf("teste de push: esperado 200 com expo_status ok, veio %d %v", status, out)
+	if status != 200 || out["expo_status"] != "ok" || out["admin_alerts"] != "ativado" {
+		t.Errorf("teste de push: esperado 200 com expo_status ok e admin_alerts ativado, veio %d %v", status, out)
+	}
+	// O aparelho do teste passa a receber os alertas do servidor
+	var alertas bool
+	database.DB.QueryRow(`SELECT admin_alerts FROM push_devices WHERE device_id = 'teste-rota-1'`).Scan(&alertas)
+	if !alertas {
+		t.Error("depois do push de teste, o aparelho deveria receber os alertas do servidor")
 	}
 	if status, _ := call(pushTest, "POST", "/admin/push/test", admin, `{"device_id": "teste-rota-nao-existe"}`); status != 404 {
 		t.Errorf("teste de push para aparelho não registrado: esperado 404, veio %d", status)

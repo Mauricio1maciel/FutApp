@@ -47,6 +47,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 016_estatisticas_do_jogo | ✅ |
 | 017_forma_recente | ✅ |
 | 018_serie_b | ✅ |
+| 019_alerta_tamanho_do_banco | ✅ |
 
 ## Testes de integração
 

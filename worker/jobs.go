@@ -19,6 +19,8 @@ import (
 //     próximos 14 dias das ligas que vêm só da ESPN (Sul-Americana, Liga das Nações)
 //   - Notificações push: a fila de avisos é lida a cada 10 segundos
 //   - API do Render: /health a cada 10 minutos, para ela não dormir (API_PUBLIC_URL)
+//   - Tamanho do banco: ao subir e todo dia ao meio-dia; push para o admin quando passar
+//     de DB_SIZE_ALERT_MB (padrão 300) e a cada 50 MB a mais
 func startDataJobs() {
 	go loopFootballDataMatches()
 	go loopMissingMatches()
@@ -26,6 +28,7 @@ func startDataJobs() {
 	go loopDaily()
 	go loopPushNotifications()
 	go loopKeepAPIAwake()
+	go loopDatabaseSize()
 }
 
 func loopFootballDataMatches() {

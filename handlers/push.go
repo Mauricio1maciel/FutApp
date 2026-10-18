@@ -294,9 +294,34 @@ func AdminPushTestHandler(w http.ResponseWriter, r *http.Request) {
 	if ticket.Details.Error == "DeviceNotRegistered" {
 		database.DeletePushToken(r.Context(), token)
 	}
-	utils.WriteJSON(w, http.StatusOK, map[string]string{
+	resp := map[string]string{
 		"expo_status":  ticket.Status,
 		"expo_error":   ticket.Details.Error,
 		"expo_message": ticket.Message,
-	})
+	}
+	// O aparelho em que o admin testou o push passa a receber os alertas do servidor
+	// (ex: banco enchendo). O app registra o push com o token de convidado, então este é
+	// o único momento em que o servidor sabe qual aparelho é do admin
+	if ticket.Status == "ok" {
+		if err := database.MarkAdminAlertDevice(r.Context(), body.DeviceID); err != nil {
+			utils.CustomLog("PUSH", "Erro ao ligar os alertas de admin no aparelho: %v", err)
+		} else {
+			resp["admin_alerts"] = "ativado"
+		}
+	}
+	utils.WriteJSON(w, http.StatusOK, resp)
+}
+
+// AdminDBSizeHandler mostra o tamanho do banco e as maiores tabelas: GET /admin/db-size
+func AdminDBSizeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utils.WriteError(w, http.StatusMethodNotAllowed, "Use GET")
+		return
+	}
+	report, err := services.GetDBSizeReport(r.Context())
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao medir o banco")
+		return
+	}
+	utils.WriteJSON(w, http.StatusOK, report)
 }
