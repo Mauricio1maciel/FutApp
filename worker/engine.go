@@ -17,12 +17,14 @@ func StartEngine() {
 	startDataJobs()
 
 	processMatches()
+	lastEngineRun.Store(time.Now().Unix())
 
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		processMatches()
+		lastEngineRun.Store(time.Now().Unix())
 	}
 }
 

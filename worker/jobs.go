@@ -22,6 +22,7 @@ import (
 //   - API do Render: /health a cada 10 minutos, para ela não dormir (API_PUBLIC_URL)
 //   - Tamanho do banco: ao subir e todo dia ao meio-dia; push para o admin quando passar
 //     de DB_SIZE_ALERT_MB (padrão 300) e a cada 50 MB a mais
+//   - Sinal de vida a um monitor externo a cada 5 minutos (HEALTHCHECK_URL)
 func startDataJobs() {
 	go loopFootballDataMatches()
 	go loopMissingMatches()
@@ -30,6 +31,7 @@ func startDataJobs() {
 	go loopPushNotifications()
 	go loopKeepAPIAwake()
 	go loopDatabaseSize()
+	go loopHealthcheck()
 }
 
 func loopFootballDataMatches() {
@@ -42,6 +44,8 @@ func loopFootballDataMatches() {
 		league := services.FootballDataLeagues[index]
 		index = (index + 1) % len(services.FootballDataLeagues)
 
+		// Sinal de vida: a volta aconteceu (a football-data fora do ar não é travamento)
+		lastDataRun.Store(time.Now().Unix())
 		if err := services.SyncFootballDataMatches(ctx, league); err != nil {
 			utils.CustomLog("JOBS", "[%s] Erro na football-data: %v", league, err)
 		} else {
