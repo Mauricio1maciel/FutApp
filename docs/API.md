@@ -133,6 +133,12 @@ app, as rotas e os formatos são os mesmos das outras ligas, com estas diferenç
   "goals_for": 55, "goals_against": 23, "goal_diff": 32, "points": 60,
   "zone": "libertadores", "season": "2026", "form": "VVEDV" }
 ```
+**Vagas por título (Brasileirão):** os campeões da Libertadores, da Sul-Americana e da
+Copa do Brasil têm vaga garantida na Libertadores, e o vice da Copa do Brasil ganha uma
+vaga a mais na pré-Libertadores. O backend lê o vencedor de cada final sozinho e a
+`zone` da tabela muda em até ~10 minutos depois do apito final. Quando o campeão já está
+na zona da Libertadores, a vaga passa para o próximo da tabela.
+
 `form`: os últimos 5 resultados na competição, do mais antigo para o mais recente
 (`V` vitória, `E` empate, `D` derrota). Tem menos letras no começo da temporada.
 Em copas e na Liga das Nações, `group_name` vem preenchido (ex: `"Group C1"`) e a

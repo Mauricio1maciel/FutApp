@@ -85,6 +85,10 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 		return err
 	}
 
+	if league == "BSA" {
+		// Campeões das copas da temporada: vagas na Libertadores sem cadastro manual
+		syncBrazilianCupWinners(ctx, season)
+	}
 	winners, _ := database.GetWinnersBySeasonAndSeason(ctx, league, season)
 	rule, _ := database.GetCompetitionRule(ctx, league, season)
 	zones, _ := database.GetZonesByLeague(ctx, league)
