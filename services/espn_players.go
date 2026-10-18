@@ -34,6 +34,10 @@ func SyncESPNRoster(ctx context.Context, leagueESPNSlug string, espnTeamID int) 
 			Flag struct {
 				Alt string `json:"alt"`
 			} `json:"flag"`
+			// Só vem para quem tem foto na ESPN (no Arsenal, 2 de 29 jogadores)
+			Headshot struct {
+				Href string `json:"href"`
+			} `json:"headshot"`
 		} `json:"athletes"`
 	}
 
@@ -48,7 +52,9 @@ func SyncESPNRoster(ctx context.Context, leagueESPNSlug string, espnTeamID int) 
 
 		playerID, _ := strconv.Atoi(item.ID)
 
-		photoURL := fmt.Sprintf("https://a.espncdn.com/combiner/i?img=/i/headshots/soccer/players/full/%v.png", item.ID)
+		// Antes o link era montado pelo ID para todo jogador, e 9 em cada 10 davam 404.
+		// Sem foto na ESPN fica vazio: o robô de imagens procura, e o app mostra as iniciais
+		photoURL := item.Headshot.Href
 
 		player := models.Player{
 			ID:           playerID,

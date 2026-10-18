@@ -21,7 +21,13 @@ func UpsertESPNPlayer(ctx context.Context, player models.Player) error {
 		short_name = EXCLUDED.short_name,
 		position = EXCLUDED.position,
 		jersey_number = EXCLUDED.jersey_number,
-		headshot_url = EXCLUDED.headshot_url,
+		-- Foto da ESPN só quando ela tem uma. Sem foto na ESPN, mantém a que já existe (ex:
+		-- a do Transfermarkt, achada pelo robô) e apaga só o link montado antigo, que dava 404
+		headshot_url = CASE
+			WHEN EXCLUDED.headshot_url <> '' THEN EXCLUDED.headshot_url
+			WHEN espn_players.headshot_url LIKE '%/combiner/i?img=/i/headshots/soccer/players/full/%' THEN ''
+			ELSE espn_players.headshot_url
+		END,
 		espn_team_id = EXCLUDED.espn_team_id,
 		nationality = EXCLUDED.nationality,
 		date_of_birth = EXCLUDED.date_of_birth

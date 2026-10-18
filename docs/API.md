@@ -73,6 +73,15 @@ do Expo web. Nada muda para o app de celular, que não manda o header `Origin`.
   `CORS_ALLOWED_ORIGINS` (ex: `https://futstatis.web.app,http://localhost:8081`). Vazio =
   qualquer origem, o que é seguro aqui porque a API não usa cookies.
 
+## Fotos e escudos
+
+`headshot_url` (jogador) e `crest_url` (time) vêm **vazios** quando não há imagem. Hoje
+isso vale para a maioria dos jogadores: a ESPN só tem foto de ~4% deles, e o robô de
+imagens completa aos poucos pelo Transfermarkt (começando por quem aparece em
+escalações). O app e o site devem mostrar um avatar com as iniciais (jogador) ou um escudo
+genérico com as iniciais (time) quando o campo vier vazio, e também quando a imagem não
+carregar. Endereços quebrados não são mais gravados.
+
 ## Autenticação
 
 Todas as rotas, menos `/auth/*`, exigem `Authorization: Bearer <token>`.

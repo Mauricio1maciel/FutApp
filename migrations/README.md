@@ -49,6 +49,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 018_serie_b | ✅ |
 | 019_alerta_tamanho_do_banco | ✅ |
 | 020_avisos_configuraveis_e_cartao_vermelho | ✅ |
+| 021_fotos_dos_jogadores | ✅ |
 
 ## Testes de integração
 
