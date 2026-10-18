@@ -32,7 +32,8 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 }
 
 // RequestLogger registra método, rota, status e tempo de cada requisição.
-// O /health só aparece no log quando falha (o Render chama a todo instante).
+// O /health só aparece no log quando falha (o Render chama a todo instante), e o preflight
+// do navegador (OPTIONS respondido pelo CORS com 204) não aparece: cada chamada do site gera um.
 // O token nunca é logado: ele vem no header, não na URL.
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +43,9 @@ func RequestLogger(next http.Handler) http.Handler {
 		next.ServeHTTP(rec, r)
 
 		if r.URL.Path == "/health" && rec.status == http.StatusOK {
+			return
+		}
+		if r.Method == http.MethodOptions && rec.status == http.StatusNoContent {
 			return
 		}
 		utils.CustomLog("HTTP", "%s %s %d %s", r.Method, r.URL.RequestURI(), rec.status, time.Since(start).Round(time.Millisecond))

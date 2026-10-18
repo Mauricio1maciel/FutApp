@@ -55,6 +55,24 @@ caso o plano mude.
 | 500 | Erro interno |
 | 502 | A API externa (ESPN/football-data) falhou numa ação de admin |
 
+## Versão web (navegador)
+
+A API aceita chamadas do site em qualquer domínio (CORS), inclusive `http://localhost:8081`
+do Expo web. Nada muda para o app de celular, que não manda o header `Origin`.
+- O navegador faz um "preflight" (`OPTIONS`) antes de cada endereço novo, porque a chamada
+  leva `Authorization`. A liberação fica guardada por até 2 h (Chrome) para o mesmo
+  endereço, então a primeira chamada de cada endereço custa uma ida a mais.
+- Os erros (401, 404, 500) também vêm com CORS: o site consegue ler o `{"error": ...}` e
+  renovar o token no 401, como o app faz.
+- O site pode ler o header `X-Cache`.
+- Login de convidado: o site precisa de um `device_id` próprio, guardado no
+  `localStorage`, e usa o mesmo `POST /auth/guest`.
+- **Notificações push não funcionam no navegador:** o `POST /push/register` só aceita
+  `platform` `android` ou `ios`. O site não deve oferecer "seguir para receber avisos".
+- Para restringir quais sites podem chamar a API, defina no Render
+  `CORS_ALLOWED_ORIGINS` (ex: `https://futstatis.web.app,http://localhost:8081`). Vazio =
+  qualquer origem, o que é seguro aqui porque a API não usa cookies.
+
 ## Autenticação
 
 Todas as rotas, menos `/auth/*`, exigem `Authorization: Bearer <token>`.
