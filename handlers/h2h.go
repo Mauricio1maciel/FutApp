@@ -7,7 +7,9 @@ import (
 	"App-Futebol/utils"
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 )
 
@@ -100,6 +102,41 @@ func AdminSyncSeasonHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		utils.CustomLog("JOBS", "[%s %d] Temporada antiga carregada", league, year)
+	}()
+	utils.WriteJSON(w, http.StatusAccepted, map[string]string{"message": "Carregando a temporada em background"})
+}
+
+// AdminSyncESPNSeasonHandler carrega na hora a temporada atual inteira de uma liga que vem
+// da ESPN (o worker faz o mesmo toda madrugada), em background:
+// POST /admin/sync-espn-season?league=UNL
+func AdminSyncESPNSeasonHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		utils.WriteError(w, http.StatusMethodNotAllowed, "Use POST")
+		return
+	}
+	league := r.URL.Query().Get("league")
+	espnOnly, err := database.GetESPNOnlyLeagues(r.Context())
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao listar as ligas")
+		return
+	}
+	if !slices.Contains(espnOnly, league) {
+		utils.WriteError(w, http.StatusBadRequest, "Informe uma liga que vem da ESPN: "+strings.Join(espnOnly, ", "))
+		return
+	}
+	if !historyRunning.CompareAndSwap(false, true) {
+		utils.WriteError(w, http.StatusConflict, "Já existe uma temporada sendo carregada")
+		return
+	}
+	go func() {
+		defer historyRunning.Store(false)
+		// Contexto próprio: a carga continua depois que a resposta 202 sai
+		days, err := services.SyncESPNSeason(context.Background(), league)
+		if err != nil {
+			utils.CustomLog("JOBS", "[%s] Erro ao carregar a temporada da ESPN: %v", league, err)
+			return
+		}
+		utils.CustomLog("JOBS", "[%s] Temporada da ESPN carregada: %d dias com jogo", league, days)
 	}()
 	utils.WriteJSON(w, http.StatusAccepted, map[string]string{"message": "Carregando a temporada em background"})
 }

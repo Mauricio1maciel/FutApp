@@ -108,6 +108,7 @@ func main() {
 	mux.HandleFunc("/admin/force-sync", middlewares.AdminAuth(handlers.ForceSyncHistoryHandler))
 	mux.HandleFunc("/admin/push/test", middlewares.AdminAuth(handlers.AdminPushTestHandler))
 	mux.HandleFunc("/admin/sync-season", middlewares.AdminAuth(handlers.AdminSyncSeasonHandler))
+	mux.HandleFunc("/admin/sync-espn-season", middlewares.AdminAuth(handlers.AdminSyncESPNSeasonHandler))
 	mux.HandleFunc("/admin/db-size", middlewares.AdminAuth(handlers.AdminDBSizeHandler))
 
 	mux.HandleFunc("/admin/sync-daily", middlewares.AdminAuth(func(w http.ResponseWriter, r *http.Request) {

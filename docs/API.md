@@ -120,8 +120,9 @@ app, as rotas e os formatos são os mesmos das outras ligas, com estas diferenç
 - **Classificação da Sul-Americana:** por grupo. O 1º vai às oitavas
   (`"Classificado - Oitavas"`), o 2º joga os playoffs contra um 3º da Libertadores
   (`"Playoffs (pré-oitavas)"`), 3º e 4º são `"Eliminado"`.
-- Os jogos dos próximos 14 dias entram no banco toda madrugada; o placar ao vivo, como
-  nas outras ligas.
+- Toda madrugada o worker confere a **temporada inteira** pelo calendário da ESPN (jogos
+  novos, remarcados e os que ficaram sem resultado com o worker desligado); o placar ao
+  vivo, como nas outras ligas.
 
 ### Formatos
 
@@ -277,6 +278,7 @@ Com token de convidado eles são **ignorados**, e a rota responde normalmente co
 | `GET /team/players_espn?teamID=X&league=BSA` | 200 `{"message", "team_api_id", "espn_team_id", "espn_league"}` |
 | `POST /admin/sync-season?league=BSA&season=2024` | 202: carrega uma temporada antiga (times, jogos e classificação) em background · 409 se outra estiver carregando |
 | `POST /admin/push/test` `{"device_id"}` | 200 `{"expo_status", "expo_error", "expo_message", "admin_alerts"}` · 404 aparelho não registrado · 502 Expo fora. Com o envio aceito, o aparelho passa a receber os **alertas do servidor** (`admin_alerts: "ativado"`) |
+| `POST /admin/sync-espn-season?league=UNL` | 202: carrega na hora a temporada atual inteira de uma liga que vem da ESPN (`BSB`, `CDB`, `CSU`, `UNL`), pelo calendário dela; o worker faz o mesmo toda madrugada · 400 liga que não vem da ESPN · 409 outra carga em andamento |
 | `GET /admin/db-size` | `{"size_mb", "limit_mb", "percent", "alert_mb", "tables": [{"name", "size_mb"}]}`: tamanho do banco e as 10 maiores tabelas |
 
 ---
