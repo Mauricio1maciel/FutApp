@@ -89,48 +89,60 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 		// Campeões das copas da temporada: vagas na Libertadores sem cadastro manual
 		syncBrazilianCupWinners(ctx, season)
 	}
+	// Liga de pontos corridos que vem da ESPN (ex: Série B): ela não informa a rodada,
+	// então a rodada é calculada pelo calendário (services/rounds.go). Os jogos sem times
+	// entram também: ficam na rodada 0
+	if _, isCup := cupFormats[league]; !isCup && league != "UNL" && len(leagueTableMatches(league, matches)) > 0 {
+		if espnOnly, _ := database.GetESPNOnlyLeagues(ctx); slices.Contains(espnOnly, league) {
+			if err := database.UpdateMatchRounds(ctx, assignLeagueRounds(regularSeason(matches))); err != nil {
+				utils.CustomLog("JOBS", "[%s] Erro ao gravar as rodadas calculadas: %v", league, err)
+			}
+		}
+	}
+
+	standings, ok := computeStandings(ctx, league, season, matches, matches)
+	if !ok {
+		return nil // copa só de mata-mata (ex: Copa do Brasil): não tem tabela
+	}
+	return database.ReplaceStandings(ctx, league, season, standings)
+}
+
+// Copas com fase de grupos: classificação por grupo
+var cupFormats = map[string]CupFormat{"WC": WorldCupFormat, "CLI": LibertadoresFormat, "CSU": SulAmericanaFormat}
+
+// computeStandings monta a classificação da temporada, sem gravar. matches são os jogos
+// que contam (na tabela ao vivo, os em andamento já entram como encerrados); formFrom são
+// os jogos de verdade, de onde sai a forma recente. ok = false quando a competição não
+// tem tabela (copa só de mata-mata).
+func computeStandings(ctx context.Context, league, season string, matches, formFrom []models.Match) ([]models.Standing, bool) {
 	winners, _ := database.GetWinnersBySeasonAndSeason(ctx, league, season)
 	rule, _ := database.GetCompetitionRule(ctx, league, season)
 	zones, _ := database.GetZonesByLeague(ctx, league)
 	criteria, _ := database.GetTieBreakers(ctx, league, season)
 
 	var standings []models.Standing
+	formMatches := formFrom // a forma usa os mesmos jogos que formam a tabela
 
-	// Jogos que formam a tabela: a forma recente usa os mesmos
-	formMatches := matches
-
-	if league == "WC" || league == "CLI" || league == "CSU" {
-		format := map[string]CupFormat{"WC": WorldCupFormat, "CLI": LibertadoresFormat, "CSU": SulAmericanaFormat}[league]
+	if format, isCup := cupFormats[league]; isCup {
 		standings = BuildCupStandings(matches, criteria, format)
-		formMatches = groupStageMatches(matches)
+		formMatches = groupStageMatches(formFrom)
 	} else if league == "UNL" {
 		standings = BuildUNLStandings(matches, criteria)
 	} else {
 		table := leagueTableMatches(league, matches)
 		if len(table) == 0 && len(matches) > 0 {
-			// Copa só de mata-mata (ex: Copa do Brasil): não tem tabela
-			return nil
-		}
-		// Liga de pontos corridos que vem da ESPN (ex: Série B): ela não informa a rodada,
-		// então a rodada é calculada pelo calendário (services/rounds.go)
-		if espnOnly, _ := database.GetESPNOnlyLeagues(ctx); slices.Contains(espnOnly, league) {
-			// Com os jogos sem times (table não tem): eles ficam na rodada 0
-			if err := database.UpdateMatchRounds(ctx, assignLeagueRounds(regularSeason(matches))); err != nil {
-				utils.CustomLog("JOBS", "[%s] Erro ao gravar as rodadas calculadas: %v", league, err)
-			}
+			return nil, false
 		}
 		standings = BuildStandings(table, winners, rule, zones, criteria)
-		formMatches = table
+		formMatches = leagueTableMatches(league, formFrom)
 	}
 
 	form := recentForm(formMatches)
-
 	for i := range standings {
 		standings[i].Season = season
 		standings[i].Form = form[standings[i].TeamID]
 	}
-
-	return database.ReplaceStandings(ctx, league, season, standings)
+	return standings, true
 }
 
 // recentForm devolve os últimos 5 resultados de cada time ("VVEDV", do mais antigo para

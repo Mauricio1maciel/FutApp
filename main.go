@@ -95,7 +95,16 @@ func main() {
 
 	mux.HandleFunc("/matches/calendar", middlewares.JWTAuth(middlewares.CacheFor(time.Minute, handlers.CalendarHandler)))
 
-	mux.HandleFunc("/standings", middlewares.JWTAuth(middlewares.CacheFor(time.Minute, handlers.StandingsHandler)))
+	// live=true: a tabela com os jogos em andamento contando, com cache mais curto
+	standings := middlewares.CacheFor(time.Minute, handlers.StandingsHandler)
+	liveStandings := middlewares.CacheFor(20*time.Second, handlers.LiveStandingsHandler)
+	mux.HandleFunc("/standings", middlewares.JWTAuth(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("live") == "true" {
+			liveStandings(w, r)
+			return
+		}
+		standings(w, r)
+	}))
 
 	mux.HandleFunc("/players", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.PlayersHandler)))
 

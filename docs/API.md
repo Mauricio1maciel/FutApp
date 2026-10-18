@@ -16,6 +16,13 @@
   - data de nascimento: `"2005-01-19"`;
   - data e hora dos jogos: string ISO vinda do banco/ESPN.
 
+- **CORS (versão web):** a API aceita chamadas de navegador de qualquer origem. O preflight
+  (`OPTIONS`) responde `204` com `Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS` e
+  `Access-Control-Allow-Headers: Authorization, Content-Type`, sem precisar de token; o site
+  também pode ler o header `X-Cache`. Para limitar a domínios conhecidos, defina no servidor
+  `CORS_ALLOWED_ORIGINS` (separados por vírgula), ex:
+  `https://futstatis.vercel.app,http://localhost:3000`. O app não manda `Origin` e não é afetado.
+
 - **Cache curto no servidor:** as rotas de leitura podem devolver dados com até 20s
   (jogos, detalhes do jogo), 1 min (classificação, calendário) ou 10 min (times,
   elencos, temporadas, artilharia) de atraso. O header `X-Cache` diz `HIT` (veio da
@@ -73,6 +80,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s). Aqui `id_event` **e** `match_id` são o ID da ESPN |
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
 | `GET /standings` | `league`, `[season]` | lista de posições |
+| `GET /standings?live=true` | `league`, `[season]` | a classificação **ao vivo** (veja abaixo) |
 | `GET /seasons` | `league` | `["2026", "2025", "2024", "2023"]`: inclui as temporadas antigas carregadas |
 | `GET /league/stats` | `league`, `[season]` | `{"top_scorers": [...], "top_assists": [...]}` |
 | `GET /teams` | `league` | lista de times |
@@ -133,6 +141,14 @@ app, as rotas e os formatos são os mesmos das outras ligas, com estas diferenç
   "goals_for": 55, "goals_against": 23, "goal_diff": 32, "points": 60,
   "zone": "libertadores", "season": "2026", "form": "VVEDV" }
 ```
+**Classificação ao vivo** (`/standings?league=PL&live=true`): a tabela como estaria se
+os jogos em andamento acabassem agora, montada a cada pedido (cache de 20 s). Mesmo
+formato da `/standings`, com dois campos a mais, que só aparecem quando valem:
+`"live": true` (o time está jogando agora) e `"position_change": 2` (posições ganhas, ou
+perdidas se negativo, em relação à tabela antes dos jogos em andamento). Sem jogo
+rolando, é igual à tabela normal. A `/standings` normal também conta os jogos em
+andamento, mas só é recalculada a cada ~10 minutos e não traz as marcações.
+
 **Vagas por título (Brasileirão):** os campeões da Libertadores, da Sul-Americana e da
 Copa do Brasil têm vaga garantida na Libertadores, e o vice da Copa do Brasil ganha uma
 vaga a mais na pré-Libertadores. O backend lê o vencedor de cada final sozinho e a

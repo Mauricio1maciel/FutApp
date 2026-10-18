@@ -39,3 +39,21 @@ func StandingsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	utils.WriteJSON(w, http.StatusOK, result)
 }
+
+// LiveStandingsHandler: a classificação como estaria se os jogos em andamento acabassem
+// agora. GET /standings?league=BSA&live=true
+func LiveStandingsHandler(w http.ResponseWriter, r *http.Request) {
+	league := r.URL.Query().Get("league")
+	if league == "" {
+		utils.WriteError(w, http.StatusBadRequest, "Informe a liga")
+		return
+	}
+	season := services.ResolveSeason(r.Context(), league, r.URL.Query().Get("season"))
+
+	result, err := services.LiveStandings(r.Context(), league, season)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao montar a classificação ao vivo")
+		return
+	}
+	utils.WriteJSON(w, http.StatusOK, result)
+}
