@@ -23,6 +23,7 @@ import (
 //   - Tamanho do banco: ao subir e todo dia ao meio-dia; push para o admin quando passar
 //     de DB_SIZE_ALERT_MB (padrão 300) e a cada 50 MB a mais
 //   - Sinal de vida a um monitor externo a cada 5 minutos (HEALTHCHECK_URL)
+//   - 04:00: backup do banco no Orange Pi, mantendo as últimas 7 cópias
 func startDataJobs() {
 	go loopFootballDataMatches()
 	go loopMissingMatches()
@@ -32,6 +33,7 @@ func startDataJobs() {
 	go loopKeepAPIAwake()
 	go loopDatabaseSize()
 	go loopHealthcheck()
+	go loopBackup()
 }
 
 func loopFootballDataMatches() {

@@ -15,6 +15,9 @@ Além das do banco (`DB_*`), do `API_TOKEN` da football-data e do `JWT_SECRET`:
 | `DB_SIZE_ALERT_MB` | Tamanho do banco (MB) a partir do qual o admin recebe push. Padrão 300. |
 | `DB_SIZE_LIMIT_MB` | Limite do plano do Supabase em MB. Padrão 500 (grátis). |
 | `DB_SSLMODE` | Padrão `require`. `disable` só para banco local sem SSL. |
+| `BACKUP_DIR` | Pasta dos backups. Padrão `~/backups/futapp`. |
+| `BACKUP_KEEP` | Quantos backups guardar. Padrão 7 (uma semana). |
+| `PG_DUMP_PATH` | Caminho do `pg_dump`, se não estiver no PATH. |
 
 ## Aviso se o worker parar (healthchecks.io)
 
@@ -33,3 +36,40 @@ Configuração (uma vez, grátis):
 
 O alerta de tamanho do banco (push para o admin) não substitui isso: ele roda dentro do
 próprio worker e para junto com ele.
+
+## Backup do banco
+
+Toda madrugada, às 04:00, o worker grava uma cópia do banco em `BACKUP_DIR` e mantém as
+últimas 7 (`futapp-AAAA-MM-DD.dump`, uns 2,5 MB cada hoje). Jogos e classificações dá
+para baixar de novo das APIs, mas usuários, aparelhos e o que cada um segue não: é isso
+que o backup protege.
+
+**Instalar o `pg_dump` no Orange Pi** (uma vez). Ele precisa ser da versão 17, a mesma
+do Supabase; a do repositório padrão costuma ser mais antiga:
+```bash
+sudo apt install -y postgresql-common
+sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
+sudo apt install -y postgresql-client-17
+pg_dump --version   # deve mostrar 17.x
+```
+
+**Testar na hora**, sem esperar a madrugada (na pasta do backend, com o `.env`):
+```bash
+go run . -backup        # ou: ./futapp -backup, se usar o binário compilado
+ls -lh ~/backups/futapp
+```
+Se o `pg_dump` faltar ou for de versão antiga, o erro aparece aqui e no log do worker.
+
+**Cartão SD:** o backup fica no mesmo cartão do sistema. Se o cartão morrer, as cópias
+vão junto. De vez em quando, copie a pasta para outro lugar (pendrive, computador ou
+nuvem).
+
+**Restaurar** (só em emergência: substitui as tabelas do banco de destino pelas da cópia):
+```bash
+pg_restore --clean --if-exists --no-owner --no-privileges \
+  -d "postgresql://USUARIO:SENHA@HOST:5432/postgres?sslmode=require" \
+  ~/backups/futapp/futapp-2026-10-18.dump
+```
+Num banco novo e vazio (ex: outro projeto do Supabase), tire o `--clean --if-exists`. O
+aviso `schema "public" already exists` é esperado e não atrapalha. Restauração testada
+em 18/10/2026: todas as tabelas voltaram com as mesmas contagens da produção.

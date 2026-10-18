@@ -36,7 +36,17 @@ func main() {
 	// 2. Cria a "Chave" de inicialização
 	isWorker := flag.Bool("worker", false, "Rodar em modo Worker (Orange Pi)")
 	criarAdmin := flag.String("criar-admin", "", "Cria (ou troca a senha de) um usuário admin: -criar-admin seu@email.com")
+	backupAgora := flag.Bool("backup", false, "Faz um backup do banco agora (o worker faz sozinho às 04:00) e sai")
 	flag.Parse()
+
+	if *backupAgora {
+		file, err := worker.RunBackup(context.Background())
+		if err != nil {
+			log.Fatalf("Erro no backup: %v", err)
+		}
+		log.Printf("Backup gravado: %s", file)
+		return
+	}
 
 	if *criarAdmin != "" {
 		if err := createAdminUser(*criarAdmin); err != nil {
@@ -137,9 +147,10 @@ func main() {
 		porta = "5000"
 	}
 
+	// CORS antes das rotas: o preflight do navegador (site) é respondido sem passar pelo JWTAuth
 	server := &http.Server{
 		Addr:    ":" + porta,
-		Handler: middlewares.RequestLogger(middlewares.Recover(mux)),
+		Handler: middlewares.RequestLogger(middlewares.Recover(middlewares.CORS(mux))),
 
 		// Sem timeouts, um cliente lento segura a conexão para sempre
 		ReadHeaderTimeout: 10 * time.Second,
