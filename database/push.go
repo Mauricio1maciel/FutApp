@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/lib/pq"
@@ -84,13 +85,30 @@ func GetPushToken(ctx context.Context, deviceID string) (string, error) {
 }
 
 // SubscribeMatch passa a seguir um jogo (repetir não dá erro)
-func SubscribeMatch(ctx context.Context, deviceID string, matchID int64) error {
+// PushKinds são os tipos de aviso, na ordem em que acontecem no jogo
+var PushKinds = []string{"lineup", "start", "goal", "red_card", "end"}
+
+// kindsArray: nil = NULL (todos os tipos)
+func kindsArray(kinds []string) interface{} {
+	if kinds == nil {
+		return nil
+	}
+	return pq.Array(kinds)
+}
+
+// As funções Subscribe* seguem um jogo, time ou liga. setKinds = false mantém os tipos de
+// aviso que a inscrição já tinha (ou todos, se é nova); setKinds = true grava kinds
+// (nil = todos).
+func SubscribeMatch(ctx context.Context, deviceID string, matchID int64, kinds []string, setKinds bool) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
 	_, err := DB.ExecContext(ctx, `
-        INSERT INTO match_subscriptions (device_id, match_id) VALUES ($1, $2)
-        ON CONFLICT DO NOTHING`, deviceID, matchID)
+        INSERT INTO match_subscriptions (device_id, match_id, kinds)
+        VALUES ($1, $2, CASE WHEN $4 THEN $3::text[] END)
+        ON CONFLICT (device_id, match_id) DO UPDATE
+        SET kinds = CASE WHEN $4 THEN EXCLUDED.kinds ELSE match_subscriptions.kinds END`,
+		deviceID, matchID, kindsArray(kinds), setKinds)
 	return subscriptionError(err, "match_subscriptions_device_fkey")
 }
 
@@ -105,13 +123,16 @@ func UnsubscribeMatch(ctx context.Context, deviceID string, matchID int64) error
 }
 
 // SubscribeTeam passa a seguir todos os jogos de um time (repetir não dá erro)
-func SubscribeTeam(ctx context.Context, deviceID string, teamID int64) error {
+func SubscribeTeam(ctx context.Context, deviceID string, teamID int64, kinds []string, setKinds bool) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
 	_, err := DB.ExecContext(ctx, `
-        INSERT INTO team_subscriptions (device_id, team_api_id) VALUES ($1, $2)
-        ON CONFLICT DO NOTHING`, deviceID, teamID)
+        INSERT INTO team_subscriptions (device_id, team_api_id, kinds)
+        VALUES ($1, $2, CASE WHEN $4 THEN $3::text[] END)
+        ON CONFLICT (device_id, team_api_id) DO UPDATE
+        SET kinds = CASE WHEN $4 THEN EXCLUDED.kinds ELSE team_subscriptions.kinds END`,
+		deviceID, teamID, kindsArray(kinds), setKinds)
 	return subscriptionError(err, "team_subscriptions_device_fkey")
 }
 
@@ -126,13 +147,16 @@ func UnsubscribeTeam(ctx context.Context, deviceID string, teamID int64) error {
 }
 
 // SubscribeLeague passa a seguir todos os jogos de uma liga (repetir não dá erro)
-func SubscribeLeague(ctx context.Context, deviceID string, league string) error {
+func SubscribeLeague(ctx context.Context, deviceID string, league string, kinds []string, setKinds bool) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
 	_, err := DB.ExecContext(ctx, `
-        INSERT INTO league_subscriptions (device_id, league) VALUES ($1, $2)
-        ON CONFLICT DO NOTHING`, deviceID, league)
+        INSERT INTO league_subscriptions (device_id, league, kinds)
+        VALUES ($1, $2, CASE WHEN $4 THEN $3::text[] END)
+        ON CONFLICT (device_id, league) DO UPDATE
+        SET kinds = CASE WHEN $4 THEN EXCLUDED.kinds ELSE league_subscriptions.kinds END`,
+		deviceID, league, kindsArray(kinds), setKinds)
 	return subscriptionError(err, "league_subscriptions_device_fkey")
 }
 
@@ -164,57 +188,68 @@ type PushSubscriptions struct {
 	Matches []int64  `json:"matches"`
 	Teams   []int64  `json:"teams"`
 	Leagues []string `json:"leagues"`
+	// Tipos de aviso das inscrições que não recebem todos (as que não aparecem, recebem)
+	Kinds          SubscriptionKinds `json:"kinds"`
+	AvailableKinds []string          `json:"available_kinds"`
 }
 
-// GetPushSubscriptions devolve os jogos, os times e as ligas que o aparelho segue
+type SubscriptionKinds struct {
+	Matches map[string][]string `json:"matches"`
+	Teams   map[string][]string `json:"teams"`
+	Leagues map[string][]string `json:"leagues"`
+}
+
 func GetPushSubscriptions(ctx context.Context, deviceID string) (PushSubscriptions, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	var subs PushSubscriptions
-	var err error
-	if subs.Matches, err = queryIDs(ctx,
-		`SELECT match_id FROM match_subscriptions WHERE device_id = $1 ORDER BY match_id`, deviceID); err != nil {
-		return subs, err
+	subs := PushSubscriptions{
+		Matches: []int64{}, Teams: []int64{}, Leagues: []string{},
+		Kinds: SubscriptionKinds{
+			Matches: map[string][]string{}, Teams: map[string][]string{}, Leagues: map[string][]string{},
+		},
+		AvailableKinds: PushKinds,
 	}
-	if subs.Teams, err = queryIDs(ctx,
-		`SELECT team_api_id FROM team_subscriptions WHERE device_id = $1 ORDER BY team_api_id`, deviceID); err != nil {
-		return subs, err
+	queries := []struct {
+		query string
+		add   func(key string)
+		kinds map[string][]string
+	}{
+		{`SELECT match_id::text, kinds FROM match_subscriptions WHERE device_id = $1 ORDER BY match_id`,
+			func(k string) { subs.Matches = append(subs.Matches, parseID(k)) }, subs.Kinds.Matches},
+		{`SELECT team_api_id::text, kinds FROM team_subscriptions WHERE device_id = $1 ORDER BY team_api_id`,
+			func(k string) { subs.Teams = append(subs.Teams, parseID(k)) }, subs.Kinds.Teams},
+		{`SELECT league, kinds FROM league_subscriptions WHERE device_id = $1 ORDER BY league`,
+			func(k string) { subs.Leagues = append(subs.Leagues, k) }, subs.Kinds.Leagues},
 	}
-
-	rows, err := DB.QueryContext(ctx,
-		`SELECT league FROM league_subscriptions WHERE device_id = $1 ORDER BY league`, deviceID)
-	if err != nil {
-		return subs, err
-	}
-	defer rows.Close()
-	subs.Leagues = []string{}
-	for rows.Next() {
-		var l string
-		if err := rows.Scan(&l); err != nil {
+	for _, q := range queries {
+		rows, err := DB.QueryContext(ctx, q.query, deviceID)
+		if err != nil {
 			return subs, err
 		}
-		subs.Leagues = append(subs.Leagues, l)
+		for rows.Next() {
+			var key string
+			var kinds pq.StringArray
+			if err := rows.Scan(&key, &kinds); err != nil {
+				rows.Close()
+				return subs, err
+			}
+			q.add(key)
+			if kinds != nil {
+				q.kinds[key] = kinds
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return subs, err
+		}
 	}
-	return subs, rows.Err()
+	return subs, nil
 }
 
-func queryIDs(ctx context.Context, query string, args ...interface{}) ([]int64, error) {
-	rows, err := DB.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	ids := []int64{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
+func parseID(s string) int64 {
+	n, _ := strconv.ParseInt(s, 10, 64)
+	return n
 }
 
 // ResolveMatchIDByESPN acha o nosso match_id a partir do ID da ESPN (a tela de jogos ao
@@ -242,7 +277,7 @@ func ResolveMatchIDByESPN(ctx context.Context, espnMatchID int64) (int64, error)
 
 // GetPushTokensForMatch devolve os tokens de quem segue o jogo, um dos times ou a liga,
 // sem repetir
-func GetPushTokensForMatch(ctx context.Context, matchID int64) ([]string, error) {
+func GetPushTokensForMatch(ctx context.Context, matchID int64, kind string) ([]string, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
@@ -250,17 +285,21 @@ func GetPushTokensForMatch(ctx context.Context, matchID int64) ([]string, error)
         SELECT DISTINCT d.push_token
         FROM push_devices d
         WHERE d.device_id IN (
-            SELECT device_id FROM match_subscriptions WHERE match_id = $1
+            -- Quem segue por mais de um caminho recebe se qualquer um pedir esse tipo
+            SELECT device_id FROM match_subscriptions
+            WHERE match_id = $1 AND (kinds IS NULL OR $2 = ANY(kinds))
             UNION
             SELECT ts.device_id
             FROM team_subscriptions ts
             JOIN matches m ON m.id = $1
             WHERE ts.team_api_id IN (m.api_home_team_id, m.api_away_team_id)
+              AND (ts.kinds IS NULL OR $2 = ANY(ts.kinds))
             UNION
             SELECT ls.device_id
             FROM league_subscriptions ls
             JOIN matches m ON m.id = $1 AND m.league = ls.league
-        )`, matchID)
+            WHERE ls.kinds IS NULL OR $2 = ANY(ls.kinds)
+        )`, matchID, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -281,10 +320,10 @@ func GetPushTokensForMatch(ctx context.Context, matchID int64) ([]string, error)
 type PendingPush struct {
 	ID          int64
 	MatchID     int64
-	Kind        string // start | goal | end | lineup
+	Kind        string // lineup | start | goal | red_card | end
 	HomeScore   int
 	AwayScore   int
-	GoalSide    string // gol: home | away | both
+	GoalSide    string // gol: home | away | both; cartão vermelho: home | away | "" (lado desconhecido)
 	HomePenalty *int
 	AwayPenalty *int
 	League      string
@@ -294,7 +333,7 @@ type PendingPush struct {
 	ESPNMatchID int64     // 0 enquanto o jogo não tem vínculo com a ESPN
 	ESPNHomeID  int64
 	ESPNAwayID  int64
-	Scorer      string // autor do gol, quando a ESPN já informou
+	Scorer      string // autor do gol (quando a ESPN já informou) ou o expulso
 	Minute      string // ex: "23'", "90'+3'"
 	OwnGoal     bool
 }
@@ -314,8 +353,8 @@ func GetPendingPushes(ctx context.Context, limit int) ([]PendingPush, error) {
                COALESCE(e.espn_match_id, 0),
                COALESCE(th.espn_team_id, 0),
                COALESCE(ta.espn_team_id, 0),
-               COALESCE(gol.player_name, ''),
-               COALESCE(gol.minute, ''),
+               COALESCE(NULLIF(o.player, ''), gol.player_name, ''),
+               COALESCE(NULLIF(o.minute, ''), gol.minute, ''),
                COALESCE(gol.event_type = 'Own Goal', false)
         FROM push_outbox o
         JOIN matches m ON m.id = o.match_id
@@ -437,4 +476,85 @@ func enqueueLineupPush(ctx context.Context, tx *sql.Tx, match models.ESPNMatchDB
         SELECT match_id, 'lineup' FROM marcado`,
 		match.ESPNHomeTeamID, match.ESPNAwayTeamID, match.MatchDate)
 	return err
+}
+
+// enqueueRedCardPushes anota um aviso para cada cartão vermelho novo do jogo. Os eventos
+// vêm da ESPN em ordem; match_push_state.reds_notified guarda quantos já foram avisados.
+// Só para jogo rolando ou que acabou há pouco: a carga de jogos antigos não vira aviso.
+func enqueueRedCardPushes(ctx context.Context, tx *sql.Tx, match models.ESPNMatchDB, events []models.ESPNEventDB, lineups []models.ESPNLineupDB) error {
+	var reds []models.ESPNEventDB
+	for _, e := range events {
+		if e.EventType == "Red Card" {
+			reds = append(reds, e)
+		}
+	}
+	if len(reds) == 0 || !recentForPush(match, time.Now()) {
+		return nil
+	}
+
+	var matchID int64
+	var notified int
+	err := tx.QueryRowContext(ctx, `
+        SELECT m.id, COALESCE(s.reds_notified, 0)
+        FROM matches m
+        JOIN teams th ON th.api_id = m.api_home_team_id
+        JOIN teams ta ON ta.api_id = m.api_away_team_id
+        LEFT JOIN match_push_state s ON s.match_id = m.id
+        WHERE th.espn_team_id = $1
+          AND ta.espn_team_id = $2
+          AND m.match_date::date = NULLIF($3, '')::timestamp::date
+          AND push_match_has_followers(m.id, m.api_home_team_id, m.api_away_team_id)
+        LIMIT 1`, match.ESPNHomeTeamID, match.ESPNAwayTeamID, match.MatchDate).Scan(&matchID, &notified)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil // ninguém segue o jogo (ou ele ainda não tem vínculo)
+	}
+	if err != nil || len(reds) <= notified {
+		return err
+	}
+
+	// O time do evento às vezes vem vazio: o lado sai da escalação do jogador
+	playerTeam := map[string]int64{}
+	for _, l := range lineups {
+		playerTeam[l.PlayerName] = l.ESPNTeamID
+	}
+	for _, e := range reds[notified:] {
+		team := e.ESPNTeamID
+		if team == 0 {
+			team = playerTeam[e.PlayerName]
+		}
+		side := ""
+		switch team {
+		case match.ESPNHomeTeamID:
+			side = "home"
+		case match.ESPNAwayTeamID:
+			side = "away"
+		}
+		if _, err := tx.ExecContext(ctx, `
+            INSERT INTO push_outbox (match_id, kind, home_score, away_score, goal_side, player, minute)
+            SELECT id, 'red_card', COALESCE(home_score, 0), COALESCE(away_score, 0), $2, $3, $4
+            FROM matches WHERE id = $1`, matchID, side, e.PlayerName, e.Minute); err != nil {
+			return err
+		}
+	}
+	_, err = tx.ExecContext(ctx, `
+        INSERT INTO match_push_state (match_id, reds_notified) VALUES ($1, $2)
+        ON CONFLICT (match_id) DO UPDATE SET reds_notified = EXCLUDED.reds_notified`, matchID, len(reds))
+	return err
+}
+
+// recentForPush: jogo rolando, ou encerrado com início nas últimas 4 horas (o cartão dos
+// acréscimos pode chegar só junto com o apito final)
+func recentForPush(match models.ESPNMatchDB, now time.Time) bool {
+	if match.Status == "in" {
+		return true
+	}
+	if match.Status != "post" {
+		return false
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04Z", "2006-01-02 15:04:05"} {
+		if start, err := time.Parse(layout, match.MatchDate); err == nil {
+			return now.Sub(start) < 4*time.Hour
+		}
+	}
+	return false
 }

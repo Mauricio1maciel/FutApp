@@ -237,8 +237,8 @@ aviso. A entrega é pelo Expo Push.
 |---|---|---|
 | `POST /push/register` | `{"token": "ExponentPushToken[...]", "platform": "android"}` | 200 `{"status": "ok"}` |
 | `DELETE /push/register` | | 200: desliga as notificações e apaga tudo o que o aparelho seguia |
-| `GET /push/subscriptions` | | 200 `{"matches": [4821], "teams": [1783], "leagues": ["BSA"]}` |
-| `POST /push/subscriptions` | um entre `{"team_id"}`, `{"league"}`, `{"match_id"}` ou `{"espn_match_id"}` | 200 `{"status": "ok", "team_id": 1783}`, `{"status": "ok", "league": "BSA"}` ou `{"status": "ok", "match_id": 4821}` |
+| `GET /push/subscriptions` | | 200 `{"matches": [4821], "teams": [1783], "leagues": ["BSA"], "kinds": {...}, "available_kinds": [...]}` (veja "Tipos de aviso") |
+| `POST /push/subscriptions` | um entre `{"team_id"}`, `{"league"}`, `{"match_id"}` ou `{"espn_match_id"}`, e opcionalmente `"kinds"` | 200 `{"status": "ok", "team_id": 1783}`, `{"status": "ok", "league": "BSA"}` ou `{"status": "ok", "match_id": 4821}` (com `"kinds"`, se veio) · 400 tipo inválido ou lista vazia |
 | `DELETE /push/subscriptions` | `?team_id=`, `?league=`, `?match_id=` ou `?espn_match_id=` | 200, mesmo formato do POST |
 
 - Chame o `POST /push/register` ao abrir o app (o token pode mudar). Repetir não dá erro.
@@ -256,9 +256,34 @@ aviso. A entrega é pelo Expo Push.
 | Escalação (~30 min antes) | `Escalações confirmadas 📋` | `Flamengo x Palmeiras · começa às 21:30` |
 | Início | `Começou! ⚽` | `Flamengo x Palmeiras` |
 | Gol | `⚽ GOL! Flamengo` | `Flamengo 1 x 0 Palmeiras · Pedro 23'` (autor quando a ESPN já informou) |
+| Cartão vermelho | `🟥 Cartão vermelho · Palmeiras` | `Gustavo Gómez 38' · Flamengo 1 x 0 Palmeiras` |
 | Fim | `Fim de jogo` | `Flamengo 2 x 1 Palmeiras` (pênaltis: `1 (4) x (3) 1`) |
 
-**Uma notificação por jogo:** escalação, início, gols e fim do mesmo jogo usam o mesmo
+**Tipos de aviso:** `lineup` (escalação confirmada), `start` (começou), `goal` (gol),
+`red_card` (cartão vermelho) e `end` (fim de jogo). Cada inscrição (time, liga ou jogo)
+recebe todos, a não ser que escolha:
+```json
+POST /push/subscriptions  { "team_id": 1783, "kinds": ["goal", "red_card", "end"] }
+```
+- Sem `"kinds"`, a inscrição nova recebe todos e a que já existe **mantém** a escolha (o
+  app pode seguir de novo ao abrir sem apagar a preferência).
+- A lista com todos os tipos volta ao padrão (inclusive tipos que surgirem depois). Lista
+  vazia dá 400: para não receber nada, deixe de seguir (`DELETE`).
+- Quem segue o mesmo jogo por dois caminhos (ex: o time e a liga) recebe o aviso se
+  qualquer um dos dois pedir aquele tipo.
+- O `GET` traz, em `"kinds"`, só as inscrições com escolha (as outras recebem todos), e a
+  lista de tipos em `"available_kinds"`:
+```json
+{ "matches": [4821], "teams": [1783], "leagues": ["BSA"],
+  "kinds": { "matches": {}, "teams": { "1783": ["goal", "end"] }, "leagues": {} },
+  "available_kinds": ["lineup", "start", "goal", "red_card", "end"] }
+```
+
+**Cartão vermelho:** *"🟥 Cartão vermelho · Palmeiras"* | *"Gustavo Gómez 38' · Flamengo
+1 x 0 Palmeiras"*. Um aviso por cartão, só com o jogo rolando (ou recém-acabado). Quando a
+ESPN não diz o time do expulso, o título vem sem o nome do time.
+
+**Uma notificação por jogo:** escalação, início, gols, cartões vermelhos e fim do mesmo jogo usam o mesmo
 identificador (`tag`/`collapseId` = `jogo-<match_id>`), então cada aviso novo
 **substitui** o anterior na tela em vez de empilhar. Como o texto sempre traz o placar
 atual, a notificação vira um resumo do jogo. Jogos diferentes continuam separados.
@@ -269,7 +294,7 @@ Cada notificação leva um `data` para o app abrir a tela do jogo ao ser tocada:
   "espn_match_id": "401861080", "espn_home": "819", "espn_away": "2029",
   "date": "2026-10-12T00:30:00Z" }
 ```
-`type` é `lineup`, `start`, `goal`, `end`, `test` ou `admin_alert`. `espn_match_id`, `espn_home`,
+`type` é `lineup`, `start`, `goal`, `red_card`, `end`, `test` ou `admin_alert`. `espn_match_id`, `espn_home`,
 `espn_away` e `date` só vêm quando o backend os conhece. Todos os valores são texto.
 
 Os avisos saem do worker em até ~1 minuto depois do lance (o tempo de a ESPN atualizar

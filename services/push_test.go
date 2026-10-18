@@ -36,6 +36,12 @@ func TestPushText(t *testing.T) {
 			p.Kind, p.HomeScore, p.AwayScore = "end", 1, 1
 			p.HomePenalty, p.AwayPenalty = pen(4), pen(3)
 		}, "Fim de jogo", "Flamengo 1 (4) x (3) 1 Palmeiras"},
+		{"cartão vermelho do visitante", func(p *database.PendingPush) {
+			p.Kind, p.GoalSide, p.HomeScore, p.Scorer, p.Minute = "red_card", "away", 1, "Gustavo Gómez", "38'"
+		}, "🟥 Cartão vermelho · Palmeiras", "Gustavo Gómez 38' · Flamengo 1 x 0 Palmeiras"},
+		{"cartão vermelho sem lado nem jogador", func(p *database.PendingPush) {
+			p.Kind = "red_card"
+		}, "🟥 Cartão vermelho", "Flamengo 0 x 0 Palmeiras"},
 		{"escalação, no horário de Brasília", func(p *database.PendingPush) {
 			p.Kind = "lineup"
 			p.MatchDate = time.Date(2026, 10, 15, 0, 30, 0, 0, time.UTC)

@@ -118,13 +118,19 @@ func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		var body struct {
-			MatchID     flexID `json:"match_id"`
-			ESPNMatchID flexID `json:"espn_match_id"`
-			TeamID      flexID `json:"team_id"`
-			League      string `json:"league"`
+			MatchID     flexID    `json:"match_id"`
+			ESPNMatchID flexID    `json:"espn_match_id"`
+			TeamID      flexID    `json:"team_id"`
+			League      string    `json:"league"`
+			Kinds       *[]string `json:"kinds"`
 		}
 		if err := decodeBody(r, &body); err != nil {
 			utils.WriteError(w, http.StatusBadRequest, "JSON inválido")
+			return
+		}
+		kinds, setKinds, msg := parseKinds(body.Kinds)
+		if msg != "" {
+			utils.WriteError(w, http.StatusBadRequest, msg)
 			return
 		}
 		target, ok := resolveTarget(w, r, int64(body.MatchID), int64(body.ESPNMatchID), int64(body.TeamID), body.League)
@@ -135,11 +141,11 @@ func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 		var err error
 		switch target.kind {
 		case "team":
-			err = database.SubscribeTeam(r.Context(), device, target.id)
+			err = database.SubscribeTeam(r.Context(), device, target.id, kinds, setKinds)
 		case "league":
-			err = database.SubscribeLeague(r.Context(), device, target.league)
+			err = database.SubscribeLeague(r.Context(), device, target.league, kinds, setKinds)
 		default:
-			err = database.SubscribeMatch(r.Context(), device, target.id)
+			err = database.SubscribeMatch(r.Context(), device, target.id, kinds, setKinds)
 		}
 		switch {
 		case errors.Is(err, database.ErrDeviceNotRegistered):
@@ -150,7 +156,14 @@ func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 			utils.CustomLog("PUSH", "Erro ao seguir: %v", err)
 			utils.WriteError(w, http.StatusInternalServerError, "Erro ao seguir")
 		default:
-			utils.WriteJSON(w, http.StatusOK, target.response())
+			resp := target.response()
+			if setKinds {
+				if kinds == nil {
+					kinds = database.PushKinds
+				}
+				resp["kinds"] = kinds
+			}
+			utils.WriteJSON(w, http.StatusOK, resp)
 		}
 
 	case http.MethodDelete:
@@ -324,4 +337,36 @@ func AdminDBSizeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.WriteJSON(w, http.StatusOK, report)
+}
+
+// parseKinds valida os tipos de aviso pedidos no POST /push/subscriptions. Omitido (ou
+// null): mantém os da inscrição (todos, se for nova). A lista com todos os tipos vira nil
+// = todos, inclusive os que surgirem depois. Devolve a mensagem de erro, se houver.
+func parseKinds(raw *[]string) (kinds []string, set bool, msg string) {
+	if raw == nil {
+		return nil, false, ""
+	}
+	if len(*raw) == 0 {
+		return nil, false, "Escolha ao menos um tipo de aviso (para não receber nada, deixe de seguir)"
+	}
+	valid := map[string]bool{}
+	for _, k := range database.PushKinds {
+		valid[k] = true
+	}
+	asked := map[string]bool{}
+	for _, k := range *raw {
+		if !valid[k] {
+			return nil, false, "Tipo de aviso inválido: " + k + " (válidos: " + strings.Join(database.PushKinds, ", ") + ")"
+		}
+		asked[k] = true
+	}
+	for _, k := range database.PushKinds { // na ordem do jogo, sem repetidos
+		if asked[k] {
+			kinds = append(kinds, k)
+		}
+	}
+	if len(kinds) == len(database.PushKinds) {
+		return nil, true, ""
+	}
+	return kinds, true, ""
 }

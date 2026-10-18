@@ -154,6 +154,24 @@ func pushText(p database.PendingPush) (string, string) {
 		}
 		return title, body
 
+	case "red_card":
+		title := "🟥 Cartão vermelho"
+		switch p.GoalSide {
+		case "home":
+			title += " · " + p.HomeTeam
+		case "away":
+			title += " · " + p.AwayTeam
+		}
+		body := placar
+		if p.Scorer != "" {
+			expulso := p.Scorer
+			if p.Minute != "" {
+				expulso += " " + p.Minute
+			}
+			body = expulso + " · " + placar
+		}
+		return title, body
+
 	case "end":
 		if p.HomePenalty != nil && p.AwayPenalty != nil {
 			placar = fmt.Sprintf("%s %d (%d) x (%d) %d %s", p.HomeTeam, p.HomeScore,
@@ -216,13 +234,13 @@ func ProcessPushOutbox(ctx context.Context) {
 }
 
 func sendPending(ctx context.Context, p database.PendingPush) {
-	tokens, err := database.GetPushTokensForMatch(ctx, p.MatchID)
+	tokens, err := database.GetPushTokensForMatch(ctx, p.MatchID, p.Kind)
 	if err != nil {
 		utils.CustomLog("PUSH", "Erro ao buscar quem segue o jogo %d: %v", p.MatchID, err)
 		return // fica na fila e tenta de novo
 	}
 	if len(tokens) == 0 {
-		markSent(ctx, p, "sem seguidores")
+		markSent(ctx, p, "sem seguidores (ou ninguém quer este tipo de aviso)")
 		return
 	}
 

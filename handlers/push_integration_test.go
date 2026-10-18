@@ -102,6 +102,8 @@ func TestRotasPush(t *testing.T) {
 		{"time inexistente", subs, "POST", "/push/subscriptions", guest, `{"team_id": 2147480000}`, 404},
 		{"jogo da ESPN inexistente", subs, "POST", "/push/subscriptions", guest, `{"espn_match_id": 1}`, 404},
 		{"método errado", subs, "PUT", "/push/subscriptions", guest, ``, 405},
+		{"tipo de aviso inválido", subs, "POST", "/push/subscriptions", guest, `{"team_id": 993001, "kinds": ["gol"]}`, 400},
+		{"lista de tipos vazia", subs, "POST", "/push/subscriptions", guest, `{"team_id": 993001, "kinds": []}`, 400},
 		{"convidado na rota de admin", pushTest, "POST", "/admin/push/test", guest, `{"device_id": "teste-rota-1"}`, 403},
 	}
 	for _, c := range casos {
@@ -117,7 +119,20 @@ func TestRotasPush(t *testing.T) {
 		t.Errorf("seguir pelo ID da ESPN: esperado 200 com match_id %d, veio %d %v", m, status, out)
 	}
 
+	// Tipos de aviso: só gols e fim do time (repetidos e fora de ordem se ajeitam)
+	status, out = call(subs, "POST", "/push/subscriptions", guest, `{"team_id": 993001, "kinds": ["end", "goal", "goal"]}`)
+	if status != 200 || !reflect.DeepEqual(out["kinds"], []interface{}{"goal", "end"}) {
+		t.Errorf("seguir o time só com gols e fim: veio %d %v", status, out)
+	}
+
 	status, out = call(subs, "GET", "/push/subscriptions", guest, ``)
+	kinds, _ := out["kinds"].(map[string]interface{})
+	if teams, _ := kinds["teams"].(map[string]interface{}); !reflect.DeepEqual(teams["993001"], []interface{}{"goal", "end"}) {
+		t.Errorf("GET deveria mostrar os tipos do time, veio %v", out["kinds"])
+	}
+	if !reflect.DeepEqual(out["available_kinds"], []interface{}{"lineup", "start", "goal", "red_card", "end"}) {
+		t.Errorf("available_kinds: veio %v", out["available_kinds"])
+	}
 	if status != 200 || !reflect.DeepEqual(out["matches"], []interface{}{float64(m)}) ||
 		!reflect.DeepEqual(out["teams"], []interface{}{float64(993001)}) ||
 		!reflect.DeepEqual(out["leagues"], []interface{}{"TSH"}) {
