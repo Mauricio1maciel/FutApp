@@ -144,6 +144,11 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		if len(evt.Participants) > 0 {
 			pName = evt.Participants[0].Athlete.DisplayName
 		}
+		// Substituição: a ESPN manda [quem entrou, quem saiu]; quem saiu vai em details
+		details := ""
+		if strings.Contains(evt.Type.Text, "Substitution") && len(evt.Participants) > 1 {
+			details = evt.Participants[1].Athlete.DisplayName
+		}
 
 		events = append(events, models.ESPNEventDB{
 			MatchID:    matchID,
@@ -151,6 +156,7 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 			EventType:  evt.Type.Text,
 			ESPNTeamID: teamID,
 			PlayerName: pName,
+			Details:    details,
 		})
 	}
 
