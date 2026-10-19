@@ -34,6 +34,7 @@ func startDataJobs() {
 	go loopDatabaseSize()
 	go loopHealthcheck()
 	go loopBackup()
+	go checkWebPushKeys()
 }
 
 func loopFootballDataMatches() {

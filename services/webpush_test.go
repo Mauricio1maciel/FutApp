@@ -179,3 +179,15 @@ func TestSendWebPushDesligadoSemChaves(t *testing.T) {
 		t.Error("sem chaves, a chave pública deveria vir vazia")
 	}
 }
+
+func TestCheckVAPIDPair(t *testing.T) {
+	setVAPID(t)
+	if err := CheckVAPIDPair(); err != nil {
+		t.Errorf("par gerado junto deveria conferir: %v", err)
+	}
+	_, outraPublica, _ := GenerateVAPIDKeys()
+	t.Setenv("VAPID_PUBLIC_KEY", outraPublica) // privada de um par, pública de outro
+	if err := CheckVAPIDPair(); err == nil {
+		t.Error("chaves de pares diferentes deveriam dar erro")
+	}
+}

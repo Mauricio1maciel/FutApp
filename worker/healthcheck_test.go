@@ -50,3 +50,23 @@ func TestSendHealthcheck(t *testing.T) {
 		t.Errorf("sinal de falha: veio %q %q (%v)", path, body, err)
 	}
 }
+
+func TestFetchWebPushKey(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/push/web-key" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Write([]byte(`{"public_key": "BChaveDaApi"}`))
+	}))
+	defer srv.Close()
+	if key, err := fetchWebPushKey(srv.Client(), srv.URL); err != nil || key != "BChaveDaApi" {
+		t.Errorf("chave da API: veio %q (%v)", key, err)
+	}
+
+	off := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(503) }))
+	defer off.Close()
+	if _, err := fetchWebPushKey(off.Client(), off.URL); err == nil {
+		t.Error("API sem as chaves (503) deveria dar erro")
+	}
+}

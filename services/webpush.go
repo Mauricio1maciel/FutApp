@@ -3,6 +3,8 @@ package services
 import (
 	"App-Futebol/database"
 	"context"
+	"crypto/ecdh"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,6 +47,22 @@ func WebPushEnabled() bool {
 // inscrições de todos os navegadores)
 func GenerateVAPIDKeys() (privateKey, publicKey string, err error) {
 	return webpush.GenerateVAPIDKeys()
+}
+
+// CheckVAPIDPair confere se a chave privada combina com a pública desta máquina
+func CheckVAPIDPair() error {
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(os.Getenv("VAPID_PRIVATE_KEY"), "="))
+	if err != nil {
+		return fmt.Errorf("VAPID_PRIVATE_KEY não é base64url: %w", err)
+	}
+	priv, err := ecdh.P256().NewPrivateKey(raw)
+	if err != nil {
+		return fmt.Errorf("VAPID_PRIVATE_KEY inválida: %w", err)
+	}
+	if base64.RawURLEncoding.EncodeToString(priv.PublicKey().Bytes()) != strings.TrimRight(os.Getenv("VAPID_PUBLIC_KEY"), "=") {
+		return errors.New("VAPID_PRIVATE_KEY e VAPID_PUBLIC_KEY não são do mesmo par")
+	}
+	return nil
 }
 
 // webPushPayload é o que o service worker do site recebe para mostrar a notificação

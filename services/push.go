@@ -369,3 +369,14 @@ func SendTestPush(ctx context.Context, target database.PushTarget) (ExpoTicket, 
 	}
 	return tickets[0], nil
 }
+
+// NotifyAdmins manda um aviso para os aparelhos de admin (app ou navegador), sem passar
+// pela fila: alertas do próprio servidor
+func NotifyAdmins(ctx context.Context, title, body string) {
+	targets, err := database.GetAdminPushTargets(ctx)
+	if err != nil || len(targets) == 0 {
+		return
+	}
+	deliver(ctx, targets, pushMessage{Title: title, Body: body,
+		Data: map[string]string{"type": "admin_alert"}, Tag: "admin-alert", TTL: 24 * 3600})
+}
