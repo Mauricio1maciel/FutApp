@@ -145,8 +145,15 @@ app, as rotas e os formatos são os mesmos das outras ligas, com estas diferenç
 - **Rodada:** nas copas, `round` é sempre 1: navegue pela fase (`round=GROUP_STAGE`).
 - **Série B:** pontos corridos como o Brasileirão (`round=1` a `38`, fase
   `REGULAR_SEASON`). A ESPN não informa a rodada: ela é calculada pelo calendário,
-  considerando jogos adiados. Jogos ainda sem times definidos ficam com `round=0`, fora
-  das 38. Zonas: `acesso` (1º a 4º), `rebaixamento` (17º a 20º) e `neutro`.
+  considerando jogos adiados. Regra de 2026 (CBF): **1º e 2º sobem direto** (zona
+  `acesso`), **3º a 6º vão aos playoffs de acesso** (zona `playoff`) e 17º a 20º caem
+  (`rebaixamento`); o resto é `neutro`.
+- **Playoffs da Série B:** 3º x 6º e 4º x 5º, em ida e volta (21 e 28/11), valendo as
+  outras 2 vagas. A ida é na casa do pior colocado; a volta, na do melhor. Empate no
+  agregado: avança o de **melhor campanha, sem pênaltis**. Os 4 jogos vêm com fase
+  `PLAYOFFS` e `round` 0 (`/matches?league=BSB&round=PLAYOFFS`), com os times "a
+  definir" (ID 0) até o fim da 38ª rodada. Não somam pontos na tabela. Depois da última
+  rodada, o `/matches?league=BSB` sem `round` passa a trazer os playoffs.
 - **Pênaltis e vencedor:** como na football-data. Jogo decidido nos pênaltis traz
   `home_penalty`/`away_penalty`, e `winner` é `HOME_TEAM`, `AWAY_TEAM` ou `DRAW` (vazio
   enquanto o jogo não acabou).

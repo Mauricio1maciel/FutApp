@@ -105,6 +105,33 @@ func TestAssignLeagueRounds(t *testing.T) {
 	}
 	confere(t, "com jogo sem times", jogos, real)
 
+	// Playoffs depois da 38ª rodada (Série B 2026), com os times já definidos: rodada 0.
+	// Caso difícil: os dois times do mata-mata se enfrentaram na própria rodada 38
+	jogos, real = tabela(20)
+	var ultimo models.Match
+	for _, j := range jogos {
+		if real[j.MatchID] == 38 {
+			ultimo = j
+			break
+		}
+	}
+	fim, _ := time.Parse("2006-01-02 15:04:05", ultimo.DateEvent)
+	playoffs := []models.Match{
+		{MatchID: 9001, APIHomeTeamID: ultimo.APIAwayTeamID, APIAwayTeamID: ultimo.APIHomeTeamID,
+			DateEvent: fim.AddDate(0, 0, 7).Format("2006-01-02 15:04:05")},
+		{MatchID: 9002, APIHomeTeamID: ultimo.APIHomeTeamID, APIAwayTeamID: ultimo.APIAwayTeamID,
+			DateEvent: fim.AddDate(0, 0, 14).Format("2006-01-02 15:04:05")},
+	}
+	jogos = append(jogos, playoffs...)
+	got := assignLeagueRounds(jogos)
+	if got[9001] != 0 || got[9002] != 0 {
+		t.Errorf("playoffs deveriam ficar na rodada 0, veio %d e %d", got[9001], got[9002])
+	}
+	confere(t, "com playoffs depois da temporada", jogos, real)
+	if extra := beyondRoundRobin(jogos); len(extra) != 2 || !extra[9001] || !extra[9002] {
+		t.Errorf("jogos além do turno e returno: esperado os 2 playoffs, veio %v", extra)
+	}
+
 	if testing.Verbose() {
 		fmt.Println("rodadas conferidas: 380 jogos por caso")
 	}

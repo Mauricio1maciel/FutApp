@@ -18,27 +18,23 @@ import (
 //     times fica com conflito. Os jogos com os dois times em conflito vão para a rodada
 //     livre para ambos: o "buraco" que o deslocamento deixou.
 //
-// Devolve match_id → rodada. Rodada 0 = fora das 38: jogo com time indefinido (a ESPN
-// marca jogos extras de fim de temporada com "TBD") ou que não cabe em nenhuma rodada
-// livre dos dois times.
+// Devolve match_id → rodada. Rodada 0 = fora das 38: jogo depois do turno e returno (os
+// playoffs, veja beyondRoundRobin), jogo com time indefinido (a ESPN marca com "TBD") ou
+// jogo que não cabe em nenhuma rodada livre dos dois times.
 func assignLeagueRounds(matches []models.Match) map[int64]int {
+	extra := beyondRoundRobin(matches)
 	ms := make([]models.Match, 0, len(matches))
 	teams := map[int64]bool{}
 	rounds := map[int64]int{}
 	for _, m := range matches {
-		if m.APIHomeTeamID == 0 || m.APIAwayTeamID == 0 {
+		if m.APIHomeTeamID == 0 || m.APIAwayTeamID == 0 || extra[m.MatchID] {
 			rounds[m.MatchID] = 0
 			continue
 		}
 		ms = append(ms, m)
 		teams[m.APIHomeTeamID], teams[m.APIAwayTeamID] = true, true
 	}
-	sort.SliceStable(ms, func(i, j int) bool {
-		if ms[i].DateEvent != ms[j].DateEvent {
-			return ms[i].DateEvent < ms[j].DateEvent
-		}
-		return ms[i].MatchID < ms[j].MatchID
-	})
+	sortByDate(ms)
 
 	// 1. Data típica de cada rodada
 	count := map[int64]int{}
@@ -122,6 +118,43 @@ func assignLeagueRounds(matches []models.Match) map[int64]int {
 		addSlot(m.APIAwayTeamID, best, 1)
 	}
 	return rounds
+}
+
+// beyondRoundRobin devolve os jogos que passam do turno e returno. Em pontos corridos cada
+// time joga 2×(n-1) vezes (38, com 20 times); o que vem depois, pela data, não é da fase
+// de pontos corridos: são os playoffs (Série B 2026: 3º x 6º e 4º x 5º, em ida e volta).
+// Jogos com time indefinido ficam de fora da conta (não são de time nenhum ainda).
+func beyondRoundRobin(matches []models.Match) map[int64]bool {
+	ms := make([]models.Match, 0, len(matches))
+	teams := map[int64]bool{}
+	for _, m := range matches {
+		if m.APIHomeTeamID != 0 && m.APIAwayTeamID != 0 {
+			ms = append(ms, m)
+			teams[m.APIHomeTeamID], teams[m.APIAwayTeamID] = true, true
+		}
+	}
+	sortByDate(ms)
+
+	capacity := 2 * (len(teams) - 1)
+	played := map[int64]int{}
+	extra := map[int64]bool{}
+	for _, m := range ms {
+		played[m.APIHomeTeamID]++
+		played[m.APIAwayTeamID]++
+		if played[m.APIHomeTeamID] > capacity || played[m.APIAwayTeamID] > capacity {
+			extra[m.MatchID] = true
+		}
+	}
+	return extra
+}
+
+func sortByDate(ms []models.Match) {
+	sort.SliceStable(ms, func(i, j int) bool {
+		if ms[i].DateEvent != ms[j].DateEvent {
+			return ms[i].DateEvent < ms[j].DateEvent
+		}
+		return ms[i].MatchID < ms[j].MatchID
+	})
 }
 
 func parseMatchDate(s string) (time.Time, bool) {

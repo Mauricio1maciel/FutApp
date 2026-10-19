@@ -19,16 +19,24 @@ func LiveStandings(ctx context.Context, league, season string) ([]models.Standin
 	if err != nil {
 		return nil, err
 	}
-	asIfFinished, playing := liveAsFinished(matches)
+	asIfFinished, liveIDs := liveAsFinished(matches)
 
-	live, ok := computeStandings(ctx, league, season, asIfFinished, matches)
+	live, used, ok := computeStandings(ctx, league, season, asIfFinished, matches)
 	if !ok {
 		return []models.Standing{}, nil
+	}
+	// "Jogando" só quem está num jogo que conta na tabela: um playoff ou um mata-mata
+	// rolando não mexe na tabela, e marcar o time enganaria
+	playing := map[int64]bool{}
+	for _, m := range used {
+		if liveIDs[m.MatchID] {
+			playing[m.APIHomeTeamID], playing[m.APIAwayTeamID] = true, true
+		}
 	}
 	official := live
 	if len(playing) > 0 {
 		// Base da variação: a tabela antes dos jogos em andamento
-		official, _ = computeStandings(ctx, league, season, withoutLive(matches), matches)
+		official, _, _ = computeStandings(ctx, league, season, withoutLive(matches), matches)
 	}
 	markLive(live, official, playing, teamCrests(matches))
 	return live, nil
@@ -37,18 +45,18 @@ func LiveStandings(ctx context.Context, league, season string) ([]models.Standin
 var liveStatuses = map[string]bool{"IN_PLAY": true, "PAUSED": true, "LIVE": true}
 
 // liveAsFinished devolve os jogos com os em andamento marcados como encerrados (no placar
-// de agora) e os times que estão jogando
+// de agora) e os IDs dos jogos em andamento
 func liveAsFinished(matches []models.Match) ([]models.Match, map[int64]bool) {
 	out := make([]models.Match, len(matches))
-	playing := map[int64]bool{}
+	liveIDs := map[int64]bool{}
 	for i, m := range matches {
 		out[i] = m
 		if liveStatuses[m.Status] {
 			out[i].Status = "FINISHED"
-			playing[m.APIHomeTeamID], playing[m.APIAwayTeamID] = true, true
+			liveIDs[m.MatchID] = true
 		}
 	}
-	return out, playing
+	return out, liveIDs
 }
 
 func withoutLive(matches []models.Match) []models.Match {

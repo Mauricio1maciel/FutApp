@@ -269,3 +269,17 @@ func UpdateMatchRounds(ctx context.Context, rounds map[int64]int) error {
 		pq.Array(ids), pq.Array(values))
 	return err
 }
+
+// SetMatchesStage grava a fase dos jogos (ex: os playoffs da Série B), só onde mudou
+func SetMatchesStage(ctx context.Context, ids []int64, stage string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	_, err := DB.ExecContext(ctx, `
+        UPDATE matches SET stage = $2
+        WHERE id = ANY($1::int[]) AND stage IS DISTINCT FROM $2`, pq.Array(ids), stage)
+	return err
+}

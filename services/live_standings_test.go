@@ -7,20 +7,20 @@ import (
 
 func TestLiveAsFinished(t *testing.T) {
 	matches := []models.Match{
-		{APIHomeTeamID: 1, APIAwayTeamID: 2, Status: "FINISHED"},
-		{APIHomeTeamID: 3, APIAwayTeamID: 4, Status: "IN_PLAY"},
-		{APIHomeTeamID: 5, APIAwayTeamID: 6, Status: "PAUSED"}, // intervalo
-		{APIHomeTeamID: 7, APIAwayTeamID: 8, Status: "TIMED"},
+		{MatchID: 10, APIHomeTeamID: 1, APIAwayTeamID: 2, Status: "FINISHED"},
+		{MatchID: 11, APIHomeTeamID: 3, APIAwayTeamID: 4, Status: "IN_PLAY"},
+		{MatchID: 12, APIHomeTeamID: 5, APIAwayTeamID: 6, Status: "PAUSED"}, // intervalo
+		{MatchID: 13, APIHomeTeamID: 7, APIAwayTeamID: 8, Status: "TIMED"},
 	}
-	out, playing := liveAsFinished(matches)
+	out, liveIDs := liveAsFinished(matches)
 	if out[1].Status != "FINISHED" || out[2].Status != "FINISHED" || out[3].Status != "TIMED" {
 		t.Errorf("status depois: %v %v %v", out[1].Status, out[2].Status, out[3].Status)
 	}
 	if matches[1].Status != "IN_PLAY" {
 		t.Error("a lista original não pode mudar (a forma usa os jogos de verdade)")
 	}
-	if len(playing) != 4 || !playing[3] || !playing[6] || playing[1] || playing[7] {
-		t.Errorf("times jogando: %v", playing)
+	if len(liveIDs) != 2 || !liveIDs[11] || !liveIDs[12] {
+		t.Errorf("jogos em andamento: %v", liveIDs)
 	}
 }
 

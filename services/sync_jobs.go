@@ -94,13 +94,25 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 	// entram também: ficam na rodada 0
 	if _, isCup := cupFormats[league]; !isCup && league != "UNL" && len(leagueTableMatches(league, matches)) > 0 {
 		if espnOnly, _ := database.GetESPNOnlyLeagues(ctx); slices.Contains(espnOnly, league) {
-			if err := database.UpdateMatchRounds(ctx, assignLeagueRounds(regularSeason(matches))); err != nil {
+			rounds := assignLeagueRounds(regularSeason(matches))
+			if err := database.UpdateMatchRounds(ctx, rounds); err != nil {
 				utils.CustomLog("JOBS", "[%s] Erro ao gravar as rodadas calculadas: %v", league, err)
+			}
+			// Os jogos fora das 38 rodadas (além do turno e returno, ou ainda sem times) são
+			// os playoffs (Série B 2026: 3º a 6º): ganham a fase PLAYOFFS
+			var playoffs []int64
+			for id, r := range rounds {
+				if r == 0 {
+					playoffs = append(playoffs, id)
+				}
+			}
+			if err := database.SetMatchesStage(ctx, playoffs, "PLAYOFFS"); err != nil {
+				utils.CustomLog("JOBS", "[%s] Erro ao marcar os playoffs: %v", league, err)
 			}
 		}
 	}
 
-	standings, ok := computeStandings(ctx, league, season, matches, matches)
+	standings, _, ok := computeStandings(ctx, league, season, matches, matches)
 	if !ok {
 		return nil // copa só de mata-mata (ex: Copa do Brasil): não tem tabela
 	}
@@ -113,28 +125,36 @@ var cupFormats = map[string]CupFormat{"WC": WorldCupFormat, "CLI": LibertadoresF
 // computeStandings monta a classificação da temporada, sem gravar. matches são os jogos
 // que contam (na tabela ao vivo, os em andamento já entram como encerrados); formFrom são
 // os jogos de verdade, de onde sai a forma recente. ok = false quando a competição não
-// tem tabela (copa só de mata-mata).
-func computeStandings(ctx context.Context, league, season string, matches, formFrom []models.Match) ([]models.Standing, bool) {
+// tem tabela (copa só de mata-mata). used são os jogos que entraram na tabela.
+func computeStandings(ctx context.Context, league, season string, matches, formFrom []models.Match) (standings []models.Standing, used []models.Match, ok bool) {
 	winners, _ := database.GetWinnersBySeasonAndSeason(ctx, league, season)
 	rule, _ := database.GetCompetitionRule(ctx, league, season)
 	zones, _ := database.GetZonesByLeague(ctx, league)
 	criteria, _ := database.GetTieBreakers(ctx, league, season)
 
-	var standings []models.Standing
 	formMatches := formFrom // a forma usa os mesmos jogos que formam a tabela
+	used = matches
 
 	if format, isCup := cupFormats[league]; isCup {
 		standings = BuildCupStandings(matches, criteria, format)
 		formMatches = groupStageMatches(formFrom)
+		used = groupStageMatches(matches)
 	} else if league == "UNL" {
 		standings = BuildUNLStandings(matches, criteria)
 	} else {
 		table := leagueTableMatches(league, matches)
 		if len(table) == 0 && len(matches) > 0 {
-			return nil, false
+			return nil, nil, false
+		}
+		formMatches = leagueTableMatches(league, formFrom)
+		// Liga da ESPN (Série B): a ESPN dá aos playoffs a mesma fase dos pontos corridos.
+		// Os jogos além do turno e returno não podem somar na tabela nem na forma
+		if espnOnly, _ := database.GetESPNOnlyLeagues(ctx); slices.Contains(espnOnly, league) {
+			table = withoutMatches(table, beyondRoundRobin(table))
+			formMatches = withoutMatches(formMatches, beyondRoundRobin(formMatches))
 		}
 		standings = BuildStandings(table, winners, rule, zones, criteria)
-		formMatches = leagueTableMatches(league, formFrom)
+		used = table
 	}
 
 	form := recentForm(formMatches)
@@ -142,7 +162,7 @@ func computeStandings(ctx context.Context, league, season string, matches, formF
 		standings[i].Season = season
 		standings[i].Form = form[standings[i].TeamID]
 	}
-	return standings, true
+	return standings, used, true
 }
 
 // recentForm devolve os últimos 5 resultados de cada time ("VVEDV", do mais antigo para
@@ -179,6 +199,19 @@ func recentForm(matches []models.Match) map[int64]string {
 		}
 	}
 	return form
+}
+
+func withoutMatches(matches []models.Match, drop map[int64]bool) []models.Match {
+	if len(drop) == 0 {
+		return matches
+	}
+	out := make([]models.Match, 0, len(matches))
+	for _, m := range matches {
+		if !drop[m.MatchID] {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 func regularSeason(matches []models.Match) []models.Match {
