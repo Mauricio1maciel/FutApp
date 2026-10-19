@@ -50,6 +50,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 019_alerta_tamanho_do_banco | ✅ |
 | 020_avisos_configuraveis_e_cartao_vermelho | ✅ |
 | 021_fotos_dos_jogadores | ✅ |
+| 022_regras_2026_27_premier_laliga_bundesliga | ✅ |
 
 ## Testes de integração
 
