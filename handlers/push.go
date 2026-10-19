@@ -5,12 +5,14 @@ import (
 	"App-Futebol/middlewares"
 	"App-Futebol/services"
 	"App-Futebol/utils"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -65,11 +67,16 @@ func PushRegisterHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		var body struct {
-			Token    string `json:"token"`
-			Platform string `json:"platform"`
+			Token        string           `json:"token"`
+			Platform     string           `json:"platform"`
+			Subscription *webSubscription `json:"subscription"`
 		}
 		if err := decodeBody(r, &body); err != nil {
 			utils.WriteError(w, http.StatusBadRequest, "JSON inválido")
+			return
+		}
+		if body.Platform == "web" {
+			registerWebPush(w, r, device, body.Subscription)
 			return
 		}
 		if !isExpoToken(body.Token) {
@@ -77,7 +84,7 @@ func PushRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if body.Platform != "" && body.Platform != "android" && body.Platform != "ios" {
-			utils.WriteError(w, http.StatusBadRequest, "platform deve ser android ou ios")
+			utils.WriteError(w, http.StatusBadRequest, "platform deve ser android, ios ou web")
 			return
 		}
 		if err := database.RegisterPushDevice(r.Context(), device, body.Token, body.Platform); err != nil {
@@ -289,7 +296,7 @@ func AdminPushTestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := database.GetPushToken(r.Context(), body.DeviceID)
+	target, err := database.GetPushTarget(r.Context(), body.DeviceID)
 	if errors.Is(err, database.ErrNotFound) {
 		utils.WriteError(w, http.StatusNotFound, "Aparelho não registrado para push")
 		return
@@ -299,15 +306,16 @@ func AdminPushTestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ticket, err := services.SendTestPush(r.Context(), token)
+	ticket, err := services.SendTestPush(r.Context(), target)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadGateway, "O Expo não aceitou o envio: "+err.Error())
+		utils.WriteError(w, http.StatusBadGateway, "O serviço de push não aceitou o envio: "+err.Error())
 		return
 	}
 	if ticket.Details.Error == "DeviceNotRegistered" {
-		database.DeletePushToken(r.Context(), token)
+		database.DeletePushToken(r.Context(), target.Token)
 	}
 	resp := map[string]string{
+		"platform":     target.Platform,
 		"expo_status":  ticket.Status,
 		"expo_error":   ticket.Details.Error,
 		"expo_message": ticket.Message,
@@ -369,4 +377,83 @@ func parseKinds(raw *[]string) (kinds []string, set bool, msg string) {
 		return nil, true, ""
 	}
 	return kinds, true, ""
+}
+
+// webSubscription é a inscrição do navegador, como o PushSubscription.toJSON() devolve
+type webSubscription struct {
+	Endpoint string `json:"endpoint"`
+	Keys     struct {
+		P256dh string `json:"p256dh"`
+		Auth   string `json:"auth"`
+	} `json:"keys"`
+}
+
+// Serviços de push dos navegadores (Chrome/Edge antigo, Firefox, Safari, Edge). Só esses:
+// senão alguém poderia fazer o servidor mandar dados para qualquer endereço
+var webPushHosts = []string{"fcm.googleapis.com", "push.services.mozilla.com", "web.push.apple.com", "notify.windows.com"}
+
+func registerWebPush(w http.ResponseWriter, r *http.Request, device string, sub *webSubscription) {
+	if !services.WebPushEnabled() {
+		utils.WriteError(w, http.StatusServiceUnavailable, "Notificações no navegador ainda não estão configuradas no servidor")
+		return
+	}
+	if msg := validateWebSubscription(sub); msg != "" {
+		utils.WriteError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if err := database.RegisterWebPushDevice(r.Context(), device, sub.Endpoint, sub.Keys.P256dh, sub.Keys.Auth); err != nil {
+		utils.CustomLog("PUSH", "Erro ao registrar navegador: %v", err)
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao registrar o navegador")
+		return
+	}
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// validateWebSubscription devolve o motivo da recusa ("" = válida)
+func validateWebSubscription(sub *webSubscription) string {
+	if sub == nil {
+		return "Informe subscription (o PushSubscription do navegador, com endpoint e keys)"
+	}
+	u, err := url.Parse(sub.Endpoint)
+	if err != nil || u.Scheme != "https" || len(sub.Endpoint) > 1000 {
+		return "subscription.endpoint inválido"
+	}
+	host := strings.ToLower(u.Hostname())
+	known := false
+	for _, h := range webPushHosts {
+		if host == h || strings.HasSuffix(host, "."+h) {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return "subscription.endpoint não é de um serviço de push conhecido"
+	}
+	if n := base64URLLen(sub.Keys.P256dh); n != 65 {
+		return "subscription.keys.p256dh inválida"
+	}
+	if n := base64URLLen(sub.Keys.Auth); n != 16 {
+		return "subscription.keys.auth inválida"
+	}
+	return ""
+}
+
+// base64URLLen devolve o tamanho decodificado da chave (-1 se não for base64url)
+func base64URLLen(s string) int {
+	b, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(s, "="))
+	if err != nil {
+		return -1
+	}
+	return len(b)
+}
+
+// PushWebKeyHandler devolve a chave pública que o site usa para inscrever o navegador:
+// GET /push/web-key → {"public_key": "..."} (503 se o push no navegador estiver desligado)
+func PushWebKeyHandler(w http.ResponseWriter, r *http.Request) {
+	key := services.WebPushPublicKey()
+	if key == "" {
+		utils.WriteError(w, http.StatusServiceUnavailable, "Notificações no navegador ainda não estão configuradas no servidor")
+		return
+	}
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"public_key": key})
 }

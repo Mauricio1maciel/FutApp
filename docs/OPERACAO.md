@@ -18,6 +18,7 @@ Além das do banco (`DB_*`), do `API_TOKEN` da football-data e do `JWT_SECRET`:
 | `BACKUP_DIR` | Pasta dos backups. Padrão `~/backups/futapp`. |
 | `BACKUP_KEEP` | Quantos backups guardar. Padrão 7 (uma semana). |
 | `PG_DUMP_PATH` | Caminho do `pg_dump`, se não estiver no PATH. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Push no navegador (versão web). As **mesmas três** no worker e no Render: o worker manda os avisos, a API registra os navegadores e faz o teste do admin. Gere uma vez com `go run . -gerar-vapid`; trocar as chaves invalida a inscrição de todos os navegadores. Sem elas, só o push do app funciona. |
 
 ## Aviso se o worker parar (healthchecks.io)
 

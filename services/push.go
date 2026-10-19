@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -234,51 +235,99 @@ func ProcessPushOutbox(ctx context.Context) {
 }
 
 func sendPending(ctx context.Context, p database.PendingPush) {
-	tokens, err := database.GetPushTokensForMatch(ctx, p.MatchID, p.Kind)
+	targets, err := database.GetPushTargetsForMatch(ctx, p.MatchID, p.Kind)
 	if err != nil {
 		utils.CustomLog("PUSH", "Erro ao buscar quem segue o jogo %d: %v", p.MatchID, err)
 		return // fica na fila e tenta de novo
 	}
-	if len(tokens) == 0 {
+	if len(targets) == 0 {
 		markSent(ctx, p, "sem seguidores (ou ninguém quer este tipo de aviso)")
 		return
 	}
 
 	title, body := pushText(p)
-	data := pushData(p)
-	tag := matchPushTag(p.MatchID)
-	msgs := make([]ExpoMessage, len(tokens))
-	for i, t := range tokens {
-		msgs[i] = ExpoMessage{To: t, Title: title, Body: body, Data: data,
-			Sound: "default", Priority: "high", TTL: pushTTL, Tag: tag, CollapseID: tag}
-	}
-
-	tickets, err := SendExpo(ctx, msgs)
-	if err != nil && len(tickets) == 0 {
-		utils.CustomLog("PUSH", "Expo falhou no aviso %d (%s): %v", p.ID, p.Kind, err)
+	msg := pushMessage{Title: title, Body: body, Data: pushData(p), Tag: matchPushTag(p.MatchID), TTL: pushTTL}
+	delivered, partial, retry := deliver(ctx, targets, msg)
+	if retry {
+		utils.CustomLog("PUSH", "Nenhum serviço de push aceitou o aviso %d (%s): fica na fila", p.ID, p.Kind)
 		return // nada saiu: fica na fila até expirar
 	}
 
-	ok := 0
-	for i, t := range tickets {
-		if t.Status == "ok" {
-			ok++
-			continue
-		}
-		if t.Details.Error == "DeviceNotRegistered" {
-			// App desinstalado ou notificação desligada: para de mandar para esse aparelho
-			database.DeletePushToken(ctx, tokens[i])
-		}
-		utils.CustomLog("PUSH", "Aviso %d recusado para um aparelho: %s %s", p.ID, t.Details.Error, t.Message)
-	}
-
-	result := fmt.Sprintf("ok %d/%d", ok, len(tokens))
-	if err != nil {
-		// Parte dos lotes saiu: não reenvia, para quem já recebeu não receber de novo
-		result += " (parcial: " + err.Error() + ")"
+	result := fmt.Sprintf("ok %d/%d", delivered, len(targets))
+	if partial != "" {
+		result += " (parcial: " + partial + ")"
 	}
 	markSent(ctx, p, result)
 	utils.CustomLog("PUSH", "%s | %s — %s [%s]", title, body, p.League, result)
+}
+
+// pushMessage é um aviso, igual para o app (Expo) e para o site (Web Push)
+type pushMessage struct {
+	Title, Body string
+	Data        map[string]string
+	Tag         string // mesmo valor = substitui o aviso anterior na tela
+	TTL         int
+}
+
+// deliver manda o aviso para os aparelhos: app pelo Expo, navegador por Web Push.
+// Inscrição que não existe mais é apagada. Devolve quantos receberam; partial descreve a
+// falha de transporte quando parte saiu (não reenvia, para ninguém receber duas vezes);
+// retry = true quando nada saiu por falha de transporte (vale tentar de novo).
+func deliver(ctx context.Context, targets []database.PushTarget, msg pushMessage) (delivered int, partial string, retry bool) {
+	var expo []database.PushTarget
+	var web []database.PushTarget
+	for _, t := range targets {
+		if t.IsWeb() {
+			web = append(web, t)
+		} else {
+			expo = append(expo, t)
+		}
+	}
+	var transportErrs []string
+
+	if len(expo) > 0 {
+		msgs := make([]ExpoMessage, len(expo))
+		for i, t := range expo {
+			msgs[i] = ExpoMessage{To: t.Token, Title: msg.Title, Body: msg.Body, Data: msg.Data,
+				Sound: "default", Priority: "high", TTL: msg.TTL, Tag: msg.Tag, CollapseID: msg.Tag}
+		}
+		tickets, err := SendExpo(ctx, msgs)
+		if err != nil {
+			transportErrs = append(transportErrs, err.Error())
+		}
+		for i, t := range tickets {
+			if t.Status == "ok" {
+				delivered++
+				continue
+			}
+			if t.Details.Error == "DeviceNotRegistered" && i < len(expo) {
+				// App desinstalado ou notificação desligada: para de mandar para esse aparelho
+				database.DeletePushToken(ctx, expo[i].Token)
+			}
+			utils.CustomLog("PUSH", "Aviso recusado para um aparelho: %s %s", t.Details.Error, t.Message)
+		}
+	}
+
+	for _, t := range web {
+		gone, err := sendWebPush(ctx, t, msg)
+		switch {
+		case err == nil:
+			delivered++
+		case gone:
+			database.DeletePushToken(ctx, t.Token)
+			utils.CustomLog("PUSH", "Navegador removido: %v", err)
+		default:
+			transportErrs = append(transportErrs, "web: "+err.Error())
+		}
+	}
+
+	if len(transportErrs) == 0 {
+		return delivered, "", false
+	}
+	if delivered == 0 {
+		return 0, "", true
+	}
+	return delivered, strings.Join(transportErrs, "; "), false
 }
 
 func markSent(ctx context.Context, p database.PendingPush, result string) {
@@ -288,14 +337,32 @@ func markSent(ctx context.Context, p database.PendingPush, result string) {
 }
 
 // SendTestPush manda uma notificação de teste para um aparelho (rota de admin)
-func SendTestPush(ctx context.Context, token string) (ExpoTicket, error) {
+// SendTestPush manda o aviso de teste para um aparelho (app ou navegador). No navegador, o
+// resultado vem no mesmo formato do Expo: Status "ok" ou "error", e Details.Error =
+// "DeviceNotRegistered" quando a inscrição não existe mais.
+func SendTestPush(ctx context.Context, target database.PushTarget) (ExpoTicket, error) {
+	msg := pushMessage{
+		Title: "Notificações ligadas ✅",
+		Body:  "Se você está vendo isto, o push do FutStatis está funcionando.",
+		Data:  map[string]string{"type": "test"},
+		TTL:   pushTTL,
+	}
+	if target.IsWeb() {
+		gone, err := sendWebPush(ctx, target, msg)
+		switch {
+		case err == nil:
+			return ExpoTicket{Status: "ok"}, nil
+		case gone:
+			tk := ExpoTicket{Status: "error", Message: err.Error()}
+			tk.Details.Error = "DeviceNotRegistered"
+			return tk, nil
+		}
+		return ExpoTicket{}, err
+	}
+
 	tickets, err := SendExpo(ctx, []ExpoMessage{{
-		To:       token,
-		Title:    "Notificações ligadas ✅",
-		Body:     "Se você está vendo isto, o push do FutStatis está funcionando.",
-		Data:     map[string]string{"type": "test"},
-		Sound:    "default",
-		Priority: "high",
+		To: target.Token, Title: msg.Title, Body: msg.Body, Data: msg.Data,
+		Sound: "default", Priority: "high",
 	}})
 	if err != nil {
 		return ExpoTicket{}, err

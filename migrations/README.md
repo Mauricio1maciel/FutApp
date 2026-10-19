@@ -51,6 +51,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 020_avisos_configuraveis_e_cartao_vermelho | ✅ |
 | 021_fotos_dos_jogadores | ✅ |
 | 022_regras_2026_27_premier_laliga_bundesliga | ✅ |
+| 023_push_no_navegador | ✅ |
 
 ## Testes de integração
 

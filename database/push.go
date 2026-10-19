@@ -46,10 +46,89 @@ func RegisterPushDevice(ctx context.Context, deviceID, token, platform string) e
         ON CONFLICT (device_id) DO UPDATE
         SET push_token = EXCLUDED.push_token,
             platform   = EXCLUDED.platform,
+            web_p256dh = NULL,
+            web_auth   = NULL,
             updated_at = now()`, deviceID, token, platform); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+// RegisterWebPushDevice registra a inscrição de push do navegador (versão web). O endpoint
+// faz o papel do token do Expo; p256dh e auth são as chaves da inscrição.
+func RegisterWebPushDevice(ctx context.Context, deviceID, endpoint, p256dh, auth string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	tx, err := DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM push_devices WHERE push_token = $1 AND device_id <> $2`, endpoint, deviceID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+        INSERT INTO push_devices (device_id, push_token, platform, web_p256dh, web_auth)
+        VALUES ($1, $2, 'web', $3, $4)
+        ON CONFLICT (device_id) DO UPDATE
+        SET push_token = EXCLUDED.push_token,
+            platform   = 'web',
+            web_p256dh = EXCLUDED.web_p256dh,
+            web_auth   = EXCLUDED.web_auth,
+            updated_at = now()`, deviceID, endpoint, p256dh, auth); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// PushTarget é para onde vai um aviso: um aparelho com o app (Token = ExponentPushToken,
+// enviado pelo Expo) ou um navegador (Platform "web", Token = endpoint, enviado por Web
+// Push com as chaves P256dh e Auth)
+type PushTarget struct {
+	Token    string
+	Platform string
+	P256dh   string
+	Auth     string
+}
+
+func (t PushTarget) IsWeb() bool { return t.Platform == "web" }
+
+const pushTargetColumns = `d.push_token, COALESCE(d.platform, ''), COALESCE(d.web_p256dh, ''), COALESCE(d.web_auth, '')`
+
+func scanPushTargets(rows *sql.Rows) ([]PushTarget, error) {
+	defer rows.Close()
+	var targets []PushTarget
+	for rows.Next() {
+		var t PushTarget
+		if err := rows.Scan(&t.Token, &t.Platform, &t.P256dh, &t.Auth); err != nil {
+			return nil, err
+		}
+		targets = append(targets, t)
+	}
+	return targets, rows.Err()
+}
+
+// GetPushTarget devolve o destino de um aparelho (ErrNotFound se não registrou o push)
+func GetPushTarget(ctx context.Context, deviceID string) (PushTarget, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	rows, err := DB.QueryContext(ctx,
+		`SELECT `+pushTargetColumns+` FROM push_devices d WHERE d.device_id = $1`, deviceID)
+	if err != nil {
+		return PushTarget{}, err
+	}
+	targets, err := scanPushTargets(rows)
+	if err != nil {
+		return PushTarget{}, err
+	}
+	if len(targets) == 0 {
+		return PushTarget{}, ErrNotFound
+	}
+	return targets[0], nil
 }
 
 // UnregisterPushDevice apaga o aparelho e, em cascata, tudo o que ele seguia
@@ -277,12 +356,14 @@ func ResolveMatchIDByESPN(ctx context.Context, espnMatchID int64) (int64, error)
 
 // GetPushTokensForMatch devolve os tokens de quem segue o jogo, um dos times ou a liga,
 // sem repetir
-func GetPushTokensForMatch(ctx context.Context, matchID int64, kind string) ([]string, error) {
+// GetPushTargetsForMatch devolve os aparelhos (app e navegador) que devem receber um
+// aviso desse tipo do jogo
+func GetPushTargetsForMatch(ctx context.Context, matchID int64, kind string) ([]PushTarget, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
 	rows, err := DB.QueryContext(ctx, `
-        SELECT DISTINCT d.push_token
+        SELECT DISTINCT `+pushTargetColumns+`
         FROM push_devices d
         WHERE d.device_id IN (
             -- Quem segue por mais de um caminho recebe se qualquer um pedir esse tipo
@@ -303,17 +384,20 @@ func GetPushTokensForMatch(ctx context.Context, matchID int64, kind string) ([]s
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	return scanPushTargets(rows)
+}
 
-	tokens := []string{}
-	for rows.Next() {
-		var t string
-		if err := rows.Scan(&t); err != nil {
-			return nil, err
-		}
-		tokens = append(tokens, t)
+// GetPushTokensForMatch é o GetPushTargetsForMatch só com os tokens
+func GetPushTokensForMatch(ctx context.Context, matchID int64, kind string) ([]string, error) {
+	targets, err := GetPushTargetsForMatch(ctx, matchID, kind)
+	if err != nil {
+		return nil, err
 	}
-	return tokens, rows.Err()
+	var tokens []string
+	for _, t := range targets {
+		tokens = append(tokens, t.Token)
+	}
+	return tokens, nil
 }
 
 // PendingPush é um aviso da fila com o que o texto da notificação precisa

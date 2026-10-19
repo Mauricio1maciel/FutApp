@@ -67,8 +67,8 @@ do Expo web. Nada muda para o app de celular, que não manda o header `Origin`.
 - O site pode ler o header `X-Cache`.
 - Login de convidado: o site precisa de um `device_id` próprio, guardado no
   `localStorage`, e usa o mesmo `POST /auth/guest`.
-- **Notificações push não funcionam no navegador:** o `POST /push/register` só aceita
-  `platform` `android` ou `ios`. O site não deve oferecer "seguir para receber avisos".
+- **Notificações no navegador:** funcionam pelo Web Push (veja "Push no navegador", na
+  seção de notificações). Seguir times, ligas e jogos é igual ao app.
 - Para restringir quais sites podem chamar a API, defina no Render
   `CORS_ALLOWED_ORIGINS` (ex: `https://futstatis.web.app,http://localhost:8081`). Vazio =
   qualquer origem, o que é seguro aqui porque a API não usa cookies.
@@ -262,7 +262,8 @@ aviso. A entrega é pelo Expo Push.
 
 | Rota | Body / parâmetros | Resposta |
 |---|---|---|
-| `POST /push/register` | `{"token": "ExponentPushToken[...]", "platform": "android"}` | 200 `{"status": "ok"}` |
+| `POST /push/register` | app: `{"token": "ExponentPushToken[...]", "platform": "android"}` · site: `{"platform": "web", "subscription": {...}}` | 200 `{"status": "ok"}` · 503 (site) push no navegador desligado |
+| `GET /push/web-key` | (sem token) | 200 `{"public_key": "..."}` · 503 push no navegador desligado |
 | `DELETE /push/register` | | 200: desliga as notificações e apaga tudo o que o aparelho seguia |
 | `GET /push/subscriptions` | | 200 `{"matches": [4821], "teams": [1783], "leagues": ["BSA"], "kinds": {...}, "available_kinds": [...]}` (veja "Tipos de aviso") |
 | `POST /push/subscriptions` | um entre `{"team_id"}`, `{"league"}`, `{"match_id"}` ou `{"espn_match_id"}`, e opcionalmente `"kinds"` | 200 `{"status": "ok", "team_id": 1783}`, `{"status": "ok", "league": "BSA"}` ou `{"status": "ok", "match_id": 4821}` (com `"kinds"`, se veio) · 400 tipo inválido ou lista vazia |
@@ -309,6 +310,26 @@ POST /push/subscriptions  { "team_id": 1783, "kinds": ["goal", "red_card", "end"
 **Cartão vermelho:** *"🟥 Cartão vermelho · Palmeiras"* | *"Gustavo Gómez 38' · Flamengo
 1 x 0 Palmeiras"*. Um aviso por cartão, só com o jogo rolando (ou recém-acabado). Quando a
 ESPN não diz o time do expulso, o título vem sem o nome do time.
+
+**Push no navegador (versão web).** Mesmos avisos, textos, tipos e inscrições do app;
+só o registro muda:
+1. `GET /push/web-key` (sem token) → `{"public_key": "..."}`. Com 503, o push no
+   navegador está desligado no servidor: esconda a opção.
+2. No site, registre um service worker e inscreva o navegador com essa chave:
+   `registration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: <public_key>})`.
+3. `POST /push/register` com `{"platform": "web", "subscription": <inscrição.toJSON()>}`
+   (endpoint e keys `p256dh`/`auth`). Só são aceitos endereços dos serviços de push dos
+   navegadores (Chrome, Firefox, Safari e Edge); outro dá 400.
+4. Seguir e deixar de seguir: as mesmas rotas `/push/subscriptions` do app.
+
+O service worker recebe, no evento `push`, o JSON
+`{"title", "body", "tag", "data"}`, com o mesmo `data` dos avisos do app, e mostra com
+`showNotification(title, {body, tag, data})`. O `tag` (`jogo-<match_id>`) faz o aviso novo
+de um jogo substituir o anterior, como no app. No clique, abra a página do jogo a partir
+do `data`, do mesmo jeito que o app. No iPhone, o Safari só recebe push com o site
+adicionado à tela de início (PWA, iOS 16.4 ou mais novo). Se o navegador trocar a
+inscrição (evento `pushsubscriptionchange`), registre de novo. Inscrição que o
+navegador cancelou é apagada sozinha no primeiro envio que falhar.
 
 **Uma notificação por jogo:** escalação, início, gols, cartões vermelhos e fim do mesmo jogo usam o mesmo
 identificador (`tag`/`collapseId` = `jogo-<match_id>`), então cada aviso novo

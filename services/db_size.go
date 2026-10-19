@@ -8,7 +8,6 @@ import (
 	"math"
 	"os"
 	"strconv"
-	"strings"
 )
 
 // Alerta de tamanho do banco: o plano grátis do Supabase vai até 500 MB, e acima disso
@@ -79,44 +78,24 @@ func CheckDatabaseSize(ctx context.Context) error {
 		return nil
 	}
 
-	tokens, err := database.GetAdminPushTokens(ctx)
+	targets, err := database.GetAdminPushTargets(ctx)
 	if err != nil {
 		return err
 	}
-	if len(tokens) == 0 {
+	if len(targets) == 0 {
 		// Não grava o nível: o aviso sai quando houver um aparelho
 		utils.CustomLog("JOBS", "Banco acima de %d MB, mas nenhum aparelho recebe os alertas: toque em \"Enviar push de teste para este aparelho\" na tela de admin do app", r.AlertMB)
 		return nil
 	}
 
 	title, body := dbSizeAlertText(r)
-	msgs := make([]ExpoMessage, len(tokens))
-	for i, t := range tokens {
-		msgs[i] = ExpoMessage{
-			To: t, Title: title, Body: body,
-			Data:  map[string]string{"type": "admin_alert", "alert": "db_size"},
-			Sound: "default", Priority: "high", TTL: 24 * 3600,
-			Tag: "admin-db-size", CollapseID: "admin-db-size",
-		}
-	}
-	tickets, err := SendExpo(ctx, msgs)
-	if err != nil {
-		return err
-	}
-	sent := false
-	var refused []string
-	for i, tk := range tickets {
-		if tk.Status == "ok" {
-			sent = true
-			continue
-		}
-		refused = append(refused, tk.Details.Error+" "+tk.Message)
-		if tk.Details.Error == "DeviceNotRegistered" && i < len(tokens) {
-			database.DeletePushToken(ctx, tokens[i])
-		}
-	}
-	if !sent {
-		return fmt.Errorf("o Expo não aceitou o alerta do banco: %s", strings.Join(refused, "; "))
+	delivered, _, _ := deliver(ctx, targets, pushMessage{
+		Title: title, Body: body,
+		Data: map[string]string{"type": "admin_alert", "alert": "db_size"},
+		Tag:  "admin-db-size", TTL: 24 * 3600,
+	})
+	if delivered == 0 {
+		return fmt.Errorf("nenhum aparelho de admin recebeu o alerta do banco")
 	}
 	utils.CustomLog("JOBS", "Alerta de tamanho do banco enviado: %s", title)
 	return database.SetAlertState(ctx, dbSizeAlertKey, level)

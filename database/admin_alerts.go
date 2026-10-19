@@ -59,26 +59,18 @@ func MarkAdminAlertDevice(ctx context.Context, deviceID string) error {
 	return err
 }
 
-// GetAdminPushTokens devolve os tokens dos aparelhos que recebem os alertas do servidor
-func GetAdminPushTokens(ctx context.Context) ([]string, error) {
+// GetAdminPushTargets devolve os aparelhos (app ou navegador) que recebem os alertas do
+// servidor
+func GetAdminPushTargets(ctx context.Context) ([]PushTarget, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	rows, err := DB.QueryContext(ctx, `SELECT push_token FROM push_devices WHERE admin_alerts ORDER BY device_id`)
+	rows, err := DB.QueryContext(ctx,
+		`SELECT `+pushTargetColumns+` FROM push_devices d WHERE d.admin_alerts ORDER BY d.device_id`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var tokens []string
-	for rows.Next() {
-		var t string
-		if err := rows.Scan(&t); err != nil {
-			return nil, err
-		}
-		tokens = append(tokens, t)
-	}
-	return tokens, rows.Err()
+	return scanPushTargets(rows)
 }
 
 // GetAlertState devolve o último valor guardado de um alerta (found = false se nunca houve)

@@ -32,12 +32,25 @@ func main() {
 		log.Println("Aviso: Arquivo .env não encontrado. Usando variáveis do sistema.")
 	}
 
-	database.Connect()
 	// 2. Cria a "Chave" de inicialização
 	isWorker := flag.Bool("worker", false, "Rodar em modo Worker (Orange Pi)")
 	criarAdmin := flag.String("criar-admin", "", "Cria (ou troca a senha de) um usuário admin: -criar-admin seu@email.com")
 	backupAgora := flag.Bool("backup", false, "Faz um backup do banco agora (o worker faz sozinho às 04:00) e sai")
+	gerarVapid := flag.Bool("gerar-vapid", false, "Gera as chaves do push no navegador (VAPID) e sai")
 	flag.Parse()
+
+	if *gerarVapid {
+		// Não precisa do banco. Gere uma vez só: trocar as chaves invalida as inscrições
+		// de todos os navegadores
+		priv, pub, err := services.GenerateVAPIDKeys()
+		if err != nil {
+			log.Fatalf("Erro ao gerar as chaves: %v", err)
+		}
+		fmt.Printf("VAPID_PUBLIC_KEY=%s\nVAPID_PRIVATE_KEY=%s\nVAPID_SUBJECT=https://futapp-r38z.onrender.com\n", pub, priv)
+		return
+	}
+
+	database.Connect()
 
 	if *backupAgora {
 		file, err := worker.RunBackup(context.Background())
@@ -118,6 +131,8 @@ func main() {
 
 	// 🔔 NOTIFICAÇÕES PUSH: com o token de convidado (identifica o aparelho)
 	mux.HandleFunc("/push/register", middlewares.JWTAuth(handlers.PushRegisterHandler))
+	// Chave pública do push no navegador (versão web): não precisa de token
+	mux.HandleFunc("/push/web-key", handlers.PushWebKeyHandler)
 	mux.HandleFunc("/push/subscriptions", middlewares.JWTAuth(handlers.PushSubscriptionsHandler))
 
 	// 🛡️ ROTAS ADMIN: usuário admin logado (/auth/login) ou header X-Admin-Key
