@@ -27,11 +27,11 @@ func TestPlayerMatchLine(t *testing.T) {
 	l, jogou := playerMatchLine(titular, []database.MatchEvent{
 		ev("Penalty - Scored", "12'", "Pedro", ""),
 		ev("Goal - Header", "45'+1'", "Pedro", ""),
-		ev("Goal", "50'", "Outro", ""),
+		ev("Goal", "50'", "Outro", "Pedro"), // assistência do Pedro
 		ev("Yellow Card", "60'", "Pedro", ""),
 		ev("Substitution", "78'", "Bruno", "Pedro"),
 	})
-	if !jogou || l.Minutes != 78 || l.Goals != 2 || l.Penalties != 1 || l.YellowCards != 1 ||
+	if !jogou || l.Minutes != 78 || l.Goals != 2 || l.Penalties != 1 || l.Assists != 1 || l.YellowCards != 1 ||
 		l.SubbedOut != "78'" || l.Result != "V" || !l.Home || l.GoalsFor != 2 {
 		t.Errorf("titular: %+v", l)
 	}
@@ -86,5 +86,14 @@ func TestAddTeamMatch(t *testing.T) {
 	}
 	if c.BiggestWin == nil || c.BiggestWin.MatchID != 1 || c.BiggestLoss == nil || c.BiggestLoss.MatchID != 2 {
 		t.Errorf("maior vitória / derrota: %+v / %+v", c.BiggestWin, c.BiggestLoss)
+	}
+}
+
+func TestIsAssistedGoal(t *testing.T) {
+	for tipo, want := range map[string]bool{"Goal": true, "Goal - Header": true, "Goal - Volley": true,
+		"Penalty - Scored": false, "Own Goal": false, "Substitution": false} {
+		if got := isAssistedGoal(tipo); got != want {
+			t.Errorf("%q: esperado %v, veio %v", tipo, want, got)
+		}
 	}
 }

@@ -144,9 +144,11 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		if len(evt.Participants) > 0 {
 			pName = evt.Participants[0].Athlete.DisplayName
 		}
-		// Substituição: a ESPN manda [quem entrou, quem saiu]; quem saiu vai em details
+		// O segundo participante vai em details: na substituição, quem saiu ([quem entrou,
+		// quem saiu]); no gol, quem deu a assistência ([autor, assistente]; pênalti e gol
+		// sem assistência vêm só com o autor)
 		details := ""
-		if strings.Contains(evt.Type.Text, "Substitution") && len(evt.Participants) > 1 {
+		if len(evt.Participants) > 1 && (strings.Contains(evt.Type.Text, "Substitution") || isAssistedGoal(evt.Type.Text)) {
 			details = evt.Participants[1].Athlete.DisplayName
 		}
 
@@ -182,4 +184,9 @@ func statsFromBoxscore(data models.ESPNSummaryResponse) *models.MatchStatistics 
 		return nil
 	}
 	return stats
+}
+
+// isAssistedGoal: tipos de gol que podem ter assistência (gol contra e pênalti não têm)
+func isAssistedGoal(t string) bool {
+	return t == "Goal" || strings.HasPrefix(t, "Goal - ")
 }

@@ -9,7 +9,8 @@ import (
 )
 
 // Estatísticas do jogador, calculadas das escalações e dos lances dos jogos que a ESPN
-// detalha (temporada atual das ligas acompanhadas). Os eventos guardam o nome do jogador;
+// detalha (temporada atual das ligas acompanhadas). Assistência: no lance de gol, details
+// é quem deu o passe. Os eventos guardam o nome do jogador;
 // dentro de um jogo ele bate 100% com o nome na escalação, que tem o ID.
 
 type PlayerTotals struct {
@@ -19,6 +20,7 @@ type PlayerTotals struct {
 	Goals       int `json:"goals"`
 	Penalties   int `json:"penalties"` // gols de pênalti (já contados em goals)
 	OwnGoals    int `json:"own_goals"`
+	Assists     int `json:"assists"`
 	YellowCards int `json:"yellow_cards"`
 	RedCards    int `json:"red_cards"`
 }
@@ -47,6 +49,7 @@ type PlayerMatchLine struct {
 	Goals        int              `json:"goals"`
 	Penalties    int              `json:"penalties"`
 	OwnGoals     int              `json:"own_goals"`
+	Assists      int              `json:"assists"`
 	YellowCards  int              `json:"yellow_cards"`
 	RedCards     int              `json:"red_cards"`
 	SubbedIn     string           `json:"subbed_in,omitempty"`  // minuto em que entrou
@@ -148,6 +151,7 @@ func addLine(t *PlayerTotals, l PlayerMatchLine) {
 	t.Goals += l.Goals
 	t.Penalties += l.Penalties
 	t.OwnGoals += l.OwnGoals
+	t.Assists += l.Assists
 	t.YellowCards += l.YellowCards
 	t.RedCards += l.RedCards
 }
@@ -159,6 +163,7 @@ func sumTotals(t *PlayerTotals, o PlayerTotals) {
 	t.Goals += o.Goals
 	t.Penalties += o.Penalties
 	t.OwnGoals += o.OwnGoals
+	t.Assists += o.Assists
 	t.YellowCards += o.YellowCards
 	t.RedCards += o.RedCards
 }
@@ -196,6 +201,8 @@ func playerMatchLine(a database.PlayerAppearance, events []database.MatchEvent) 
 			start, line.SubbedIn = minuteOf(e.Minute), e.Minute
 		case e.Type == "Substitution" && e.Details == a.PlayerName:
 			out, line.SubbedOut = minuteOf(e.Minute), e.Minute
+		case isAssistedGoal(e.Type) && e.Details == a.PlayerName:
+			line.Assists++ // no gol, details é quem deu a assistência
 		case e.Player != a.PlayerName:
 		case e.Type == "Own Goal":
 			line.OwnGoals++

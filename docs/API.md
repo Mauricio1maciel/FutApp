@@ -241,12 +241,26 @@ entre os dois, em qualquer competição e temporada que o banco tem.
 O `summary` conta todos os jogos; `matches` traz até `limit` (padrão 10, máximo 50).
 Decisão por pênaltis conta como empate no resumo.
 
+**Eventos do jogo** (`events` do `/match/history`): `player_name` é o jogador do lance e
+`details` completa conforme o tipo:
+
+| `event_type` | `player_name` | `details` |
+|---|---|---|
+| `Goal`, `Goal - Header`, `Goal - Volley`, `Goal - Free-kick` | quem marcou | quem deu a **assistência** (vazio se não houve) |
+| `Penalty - Scored` | quem converteu | vazio |
+| `Own Goal` | quem fez contra | vazio |
+| `Substitution` | quem **entrou** | quem **saiu** |
+| `Yellow Card`, `Red Card` | quem levou | vazio |
+
+Os nomes são os mesmos da escalação (`lineups.player_name`) do jogo: dá para marcar na
+escalação quem fez gol, deu assistência, levou cartão, entrou ou saiu comparando pelo nome.
+
 **Estatísticas do jogador** (`/player/stats?id=235017`), calculadas das escalações e
 dos lances dos jogos que a ESPN detalha:
 ```json
 { "player_id": 235017,
   "current": { "appearances": 31, "starts": 28, "minutes": 2410, "goals": 16, "penalties": 3,
-               "own_goals": 0, "yellow_cards": 4, "red_cards": 0 },
+               "own_goals": 0, "assists": 6, "yellow_cards": 4, "red_cards": 0 },
   "competitions": [ { "league": "BSA", "league_name": "Brasileirão - Série A", "season": "2026",
                       "team": { "id": 1783, "name": "CR Flamengo", "crest_url": "..." },
                       "appearances": 31, "starts": 28, "minutes": 2410, "goals": 16, ... } ],
@@ -259,8 +273,8 @@ dos lances dos jogos que a ESPN detalha:
   competição, temporada e time (o jogador que trocou de time aparece duas vezes).
 - `goals` inclui os de pênalti (`penalties`); gol contra fica em `own_goals`.
 - `minutes` é aproximado: 90 por jogo (120 com prorrogação), menos o tempo fora de campo.
-- Reserva que não entrou não conta como jogo. Assistências não vêm (a ESPN não manda nos
-  lances).
+- Reserva que não entrou não conta como jogo. `assists`: passes para gol (no lance de gol,
+  a ESPN informa quem deu a assistência; pênalti e gol contra não têm).
 - `last_matches`: até 10, do mais recente; `espn_match_id` abre a tela do jogo.
 - Só jogos com escalação da ESPN (temporada atual das ligas acompanhadas).
 
