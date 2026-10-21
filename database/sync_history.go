@@ -21,7 +21,13 @@ func GetMissingMatches(ctx context.Context, league string) ([]map[string]string,
         )
         WHERE m.league = $1
           AND m.status = 'FINISHED'
-          AND e.espn_match_id IS NULL
+          AND (e.espn_match_id IS NULL
+               -- Tem o jogo da ESPN, mas sem escalação (o worker perdeu o detalhe). Só na
+               -- primeira semana: há jogos que a ESPN nunca detalha, e eles seriam
+               -- procurados de novo a cada volta
+               OR (m.match_date > (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'
+                   AND NOT EXISTS (SELECT 1 FROM espn_match_lineups l
+                                   WHERE l.espn_match_id = e.espn_match_id)))
           -- Só a temporada atual: o banco também guarda temporadas antigas (confronto
           -- direto), e buscar a escalação de cada jogo antigo na ESPN levaria dias
           AND m.season = (SELECT max(season) FROM matches

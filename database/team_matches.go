@@ -60,6 +60,14 @@ func GetMatchesByTeamID(ctx context.Context, teamID int64, rounds []int64) ([]mo
 	return queryMatches(ctx, "GetMatchesByTeamID", where+` ORDER BY m.match_date ASC`, args...)
 }
 
+// GetTeamMatchesInSeason devolve os jogos do time numa temporada, em todas as competições
+func GetTeamMatchesInSeason(ctx context.Context, teamID int64, season string) ([]models.Match, error) {
+	where := `
+    WHERE (m.api_home_team_id = $1 OR m.api_away_team_id = $1) AND m.season = $2
+    ORDER BY m.match_date ASC`
+	return queryMatches(ctx, "GetTeamMatchesInSeason", where, teamID, season)
+}
+
 // GetHeadToHead devolve os jogos já encerrados entre os dois times, em qualquer
 // competição e temporada, do mais recente para o mais antigo
 func GetHeadToHead(ctx context.Context, team1, team2 int64) ([]models.Match, error) {
