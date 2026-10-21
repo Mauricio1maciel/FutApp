@@ -53,6 +53,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 022_regras_2026_27_premier_laliga_bundesliga | ✅ |
 | 023_push_no_navegador | ✅ |
 | 024_serie_b_playoffs_de_acesso | ✅ |
+| 025_junta_clubes_duplicados | ✅ |
 
 ## Testes de integração
 
