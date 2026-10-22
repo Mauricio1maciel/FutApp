@@ -31,7 +31,7 @@ var (
 )
 
 var heavyRoutes = map[string]bool{
-	"/search": true, "/player/stats": true, "/team/stats": true, "/h2h": true,
+	"/search": true, "/player/stats": true, "/team/stats": true, "/h2h": true, "/standings/chances": true,
 }
 
 // routeClass escolhe o limite pela rota. Sem limite: /health (o Orange Pi chama para a

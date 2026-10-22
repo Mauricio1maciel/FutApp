@@ -24,7 +24,7 @@
   `https://futstatis.vercel.app,http://localhost:3000`. O app não manda `Origin` e não é afetado.
 
 - **Cache curto no servidor:** as rotas de leitura podem devolver dados com até 20s
-  (jogos, detalhes do jogo), 1 min (classificação, calendário) ou 10 min (times,
+  (jogos, detalhes do jogo), 1 min (classificação, calendário), 2 min (chances) ou 10 min (times,
   elencos, temporadas, artilharia) de atraso. O header `X-Cache` diz `HIT` (veio da
   memória), `MISS` (veio do banco) ou `BYPASS` (admin, sempre fresco). Puxar para
   atualizar mais rápido que isso não traz dado novo.
@@ -74,7 +74,7 @@ minuto. Uso normal do app e do site não chega perto:
 | Rotas | Limite por endereço |
 |---|---|
 | `/auth/guest`, `/auth/login` | 20 por minuto (10 seguidos) |
-| `/search`, `/player/stats`, `/team/stats`, `/h2h`, `/standings?live=true` | 60 por minuto (30 seguidos) |
+| `/search`, `/player/stats`, `/team/stats`, `/h2h`, `/standings?live=true`, `/standings/chances` | 60 por minuto (30 seguidos) |
 | as demais (menos `/health`) | 240 por minuto (120 seguidos) |
 
 Passou do limite: **429** com `{"error": "Muitos pedidos em pouco tempo. Tente de novo em N s."}`
@@ -138,6 +138,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
 | `GET /standings` | `league`, `[season]` | lista de posições |
 | `GET /standings?live=true` | `league`, `[season]` | a classificação **ao vivo** (veja abaixo) |
+| `GET /standings/chances` | `league`, `[season]` | chances de título, de cada zona e de cada posição final (veja abaixo) |
 | `GET /seasons` | `league` | `["2026", "2025", "2024", "2023"]`: inclui as temporadas antigas carregadas |
 | `GET /league/stats` | `league`, `[season]` | `{"top_scorers": [...], "top_assists": [...]}` |
 | `GET /teams` | `league` | lista de times |
@@ -218,6 +219,38 @@ Copa do Brasil têm vaga garantida na Libertadores, e o vice da Copa do Brasil g
 vaga a mais na pré-Libertadores. O backend lê o vencedor de cada final sozinho e a
 `zone` da tabela muda em até ~10 minutos depois do apito final. Quando o campeão já está
 na zona da Libertadores, a vaga passa para o próximo da tabela.
+
+**Chances** (`/standings/chances?league=BSA`): o que falta da temporada é simulado
+milhares de vezes, e cada time recebe a chance (em %) de terminar campeão, em cada zona
+da tabela e em cada posição. Só para ligas de pontos corridos (inclusive a fase de liga
+da Champions); copa e Liga das Nações dão 404.
+```json
+{ "league": "BSA", "season": "2026", "simulations": 10000, "remaining_matches": 71,
+  "zones": ["libertadores", "pre_libertadores", "sul_americana", "rebaixamento"],
+  "teams": [
+    { "team_id": 1783, "team_name": "CR Flamengo", "crest_url": "https://...",
+      "position": 1, "points": 67, "played": 31, "expected_points": 81.3,
+      "title": 61.7,
+      "zones": { "libertadores": 100, "pre_libertadores": 0, "sul_americana": 0, "rebaixamento": 0 },
+      "positions": [61.7, 38.3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } ] }
+```
+- `teams` vem na ordem da classificação de agora (`position`, `points` e `played` iguais
+  aos da `/standings`). `expected_points` é a média de pontos no fim.
+- `zones` traz só as zonas que aparecem nas simulações, de cima para baixo da tabela, com
+  os mesmos valores do campo `zone` da `/standings` (Série B: `acesso`, `playoff`,
+  `rebaixamento`). Use as mesmas cores e nomes da tabela. Cada time traz todas elas.
+- `positions[0]` é a chance de terminar em 1º (igual a `title`), `positions[1]` em 2º, e
+  assim por diante. Somando, cada time dá 100%, e cada zona dá o número de vagas dela
+  (as 4 vagas de rebaixamento somam 400% entre os times).
+- `0` é "menos de 0,05%", e `100` é "mais de 99,95%". Para mostrar "já garantido" ou "já
+  eliminado", use 100 e 0.
+- O modelo: o placar de cada jogo que falta sai da força de ataque e de defesa dos dois
+  times na temporada, com o mando de campo da liga. Jogo em andamento parte do placar de
+  agora, no tempo que falta. Desempate pelos critérios da liga, sem o confronto direto.
+  As vagas seguem as regras da tabela, com os campeões de copa já definidos.
+- A mesma tabela dá sempre as mesmas chances: elas mudam quando sai um resultado (ou um
+  gol, num jogo em andamento). Cache de 2 min. Com a temporada encerrada, vem
+  `remaining_matches: 0` e a tabela final (100% na posição de cada um).
 
 `form`: os últimos 5 resultados na competição, do mais antigo para o mais recente
 (`V` vitória, `E` empate, `D` derrota). Tem menos letras no começo da temporada.

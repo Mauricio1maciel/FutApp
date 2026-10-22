@@ -128,25 +128,46 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 // Copas com fase de grupos: classificação por grupo
 var cupFormats = map[string]CupFormat{"WC": WorldCupFormat, "CLI": LibertadoresFormat, "CSU": SulAmericanaFormat}
 
+// tableRules é o que a classificação de uma liga lê do banco, além dos jogos
+type tableRules struct {
+	winners  []models.Winner         // campeões das copas: vagas garantidas
+	rule     *models.CompetitionRule // quantas vagas e quantos rebaixados
+	zones    []models.CompetitionZone
+	criteria []string // critérios de desempate
+	espnOnly bool     // liga que vem só da ESPN (ex: Série B)
+}
+
+func loadTableRules(ctx context.Context, league, season string) tableRules {
+	var r tableRules
+	r.winners, _ = database.GetWinnersBySeasonAndSeason(ctx, league, season)
+	r.rule, _ = database.GetCompetitionRule(ctx, league, season)
+	r.zones, _ = database.GetZonesByLeague(ctx, league)
+	r.criteria, _ = database.GetTieBreakers(ctx, league, season)
+	espnOnly, _ := database.GetESPNOnlyLeagues(ctx)
+	r.espnOnly = slices.Contains(espnOnly, league)
+	return r
+}
+
 // computeStandings monta a classificação da temporada, sem gravar. matches são os jogos
 // que contam (na tabela ao vivo, os em andamento já entram como encerrados); formFrom são
 // os jogos de verdade, de onde sai a forma recente. ok = false quando a competição não
 // tem tabela (copa só de mata-mata). used são os jogos que entraram na tabela.
 func computeStandings(ctx context.Context, league, season string, matches, formFrom []models.Match) (standings []models.Standing, used []models.Match, ok bool) {
-	winners, _ := database.GetWinnersBySeasonAndSeason(ctx, league, season)
-	rule, _ := database.GetCompetitionRule(ctx, league, season)
-	zones, _ := database.GetZonesByLeague(ctx, league)
-	criteria, _ := database.GetTieBreakers(ctx, league, season)
+	return buildTable(loadTableRules(ctx, league, season), league, season, matches, formFrom)
+}
 
+// buildTable é o computeStandings com as regras já lidas do banco (cada leitura custa
+// uma ida ao banco: quem monta mais de uma tabela da mesma liga lê uma vez só)
+func buildTable(rules tableRules, league, season string, matches, formFrom []models.Match) (standings []models.Standing, used []models.Match, ok bool) {
 	formMatches := formFrom // a forma usa os mesmos jogos que formam a tabela
 	used = matches
 
 	if format, isCup := cupFormats[league]; isCup {
-		standings = BuildCupStandings(matches, criteria, format)
+		standings = BuildCupStandings(matches, rules.criteria, format)
 		formMatches = groupStageMatches(formFrom)
 		used = groupStageMatches(matches)
 	} else if league == "UNL" {
-		standings = BuildUNLStandings(matches, criteria)
+		standings = BuildUNLStandings(matches, rules.criteria)
 	} else {
 		table := leagueTableMatches(league, matches)
 		if len(table) == 0 && len(matches) > 0 {
@@ -155,11 +176,11 @@ func computeStandings(ctx context.Context, league, season string, matches, formF
 		formMatches = leagueTableMatches(league, formFrom)
 		// Liga da ESPN (Série B): a ESPN dá aos playoffs a mesma fase dos pontos corridos.
 		// Os jogos além do turno e returno não podem somar na tabela nem na forma
-		if espnOnly, _ := database.GetESPNOnlyLeagues(ctx); slices.Contains(espnOnly, league) {
+		if rules.espnOnly {
 			table = withoutMatches(table, beyondRoundRobin(table))
 			formMatches = withoutMatches(formMatches, beyondRoundRobin(formMatches))
 		}
-		standings = BuildStandings(table, winners, rule, zones, criteria)
+		standings = BuildStandings(table, rules.winners, rules.rule, rules.zones, rules.criteria)
 		used = table
 	}
 

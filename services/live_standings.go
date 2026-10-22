@@ -21,7 +21,8 @@ func LiveStandings(ctx context.Context, league, season string) ([]models.Standin
 	}
 	asIfFinished, liveIDs := liveAsFinished(matches)
 
-	live, used, ok := computeStandings(ctx, league, season, asIfFinished, matches)
+	rules := loadTableRules(ctx, league, season)
+	live, used, ok := buildTable(rules, league, season, asIfFinished, matches)
 	if !ok {
 		return []models.Standing{}, nil
 	}
@@ -36,7 +37,7 @@ func LiveStandings(ctx context.Context, league, season string) ([]models.Standin
 	official := live
 	if len(playing) > 0 {
 		// Base da variação: a tabela antes dos jogos em andamento
-		official, _, _ = computeStandings(ctx, league, season, withoutLive(matches), matches)
+		official, _, _ = buildTable(rules, league, season, withoutLive(matches), matches)
 	}
 	markLive(live, official, playing, teamCrests(matches))
 	return live, nil

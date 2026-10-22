@@ -119,6 +119,13 @@ func TestRateLimitMiddleware(t *testing.T) {
 	if ultimo != http.StatusTooManyRequests {
 		t.Errorf("31ª busca seguida deveria dar 429, veio %d", ultimo)
 	}
+	// As chances (simulação) também são pesadas, num balde só delas por endereço
+	for i := 0; i < 31; i++ {
+		ultimo = call("GET", "/standings/chances?league=BSA", "200.5.5.5").Code
+	}
+	if ultimo != http.StatusTooManyRequests {
+		t.Errorf("31º pedido seguido de chances deveria dar 429, veio %d", ultimo)
+	}
 
 	// RATE_LIMIT=off desliga
 	t.Setenv("RATE_LIMIT", "off")

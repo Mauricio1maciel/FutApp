@@ -5,6 +5,7 @@ import (
 	"App-Futebol/middlewares"
 	"App-Futebol/services"
 	"App-Futebol/utils"
+	"errors"
 	"net/http"
 )
 
@@ -53,6 +54,28 @@ func LiveStandingsHandler(w http.ResponseWriter, r *http.Request) {
 	result, err := services.LiveStandings(r.Context(), league, season)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao montar a classificação ao vivo")
+		return
+	}
+	utils.WriteJSON(w, http.StatusOK, result)
+}
+
+// ChancesHandler: as chances de título, de cada zona e de cada posição final, simulando o
+// que falta da temporada. GET /standings/chances?league=BSA[&season=2026]
+func ChancesHandler(w http.ResponseWriter, r *http.Request) {
+	league := r.URL.Query().Get("league")
+	if league == "" {
+		utils.WriteError(w, http.StatusBadRequest, "Informe a liga")
+		return
+	}
+	season := services.ResolveSeason(r.Context(), league, r.URL.Query().Get("season"))
+
+	result, err := services.LeagueChancesFor(r.Context(), league, season)
+	if errors.Is(err, services.ErrNoLeagueTable) {
+		utils.WriteError(w, http.StatusNotFound, "Esta competição não tem tabela de pontos corridos")
+		return
+	}
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao calcular as chances")
 		return
 	}
 	utils.WriteJSON(w, http.StatusOK, result)

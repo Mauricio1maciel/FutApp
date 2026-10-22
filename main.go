@@ -120,6 +120,8 @@ func main() {
 		}
 		standings(w, r)
 	}))
+	// Chances de título, vagas e rebaixamento: simula o que falta da temporada
+	mux.HandleFunc("/standings/chances", middlewares.JWTAuth(middlewares.CacheFor(2*time.Minute, handlers.ChancesHandler)))
 
 	mux.HandleFunc("/players", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.PlayersHandler)))
 
