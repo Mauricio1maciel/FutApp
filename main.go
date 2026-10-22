@@ -105,6 +105,8 @@ func main() {
 
 	mux.HandleFunc("/matches", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.MatchesHandler)))
 	mux.HandleFunc("/team/matches", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.TeamMatchesHandler)))
+	// Jogos de quem a pessoa segue ("Meus jogos"): ?teams=1783,1766&leagues=BSA&matches=4821
+	mux.HandleFunc("/matches/following", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.FollowingMatchesHandler)))
 
 	mux.HandleFunc("/matches/calendar", middlewares.JWTAuth(middlewares.CacheFor(time.Minute, handlers.CalendarHandler)))
 

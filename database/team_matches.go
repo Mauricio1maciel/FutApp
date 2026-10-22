@@ -4,17 +4,20 @@ import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
 	"context"
+	"time"
 
 	"github.com/lib/pq"
 )
 
-// teamMatchesSelect é a lista de jogos com nomes, escudos e o vínculo com a ESPN, usada
-// pelos jogos de um time e pelo confronto direto
+// teamMatchesSelect é a lista de jogos com nomes, escudos, a liga e o vínculo com a ESPN,
+// usada pelos jogos de um time, pelo confronto direto e pelos jogos de quem a pessoa segue
 const teamMatchesSelect = `
     SELECT 
         m.id,
         COALESCE(e.espn_match_id::TEXT, 0::TEXT), 
         COALESCE(m.league, ''),
+        COALESCE(l.name, ''),
+        COALESCE(l.logo_url, ''),
         COALESCE(m.season, ''),
         COALESCE(m.round, 0),
         COALESCE(m.api_home_team_id, 0),
@@ -37,6 +40,7 @@ const teamMatchesSelect = `
     FROM matches m 
     LEFT JOIN teams th ON m.api_home_team_id = th.api_id
     LEFT JOIN teams ta ON m.api_away_team_id = ta.api_id
+    LEFT JOIN leagues l ON m.league = l.code_api
     LEFT JOIN espn_matches e ON (
         th.espn_team_id = e.espn_home_team_id 
         AND ta.espn_team_id = e.espn_away_team_id
@@ -79,6 +83,31 @@ func GetHeadToHead(ctx context.Context, team1, team2 int64) ([]models.Match, err
 	return queryMatches(ctx, "GetHeadToHead", where, team1, team2)
 }
 
+// GetFollowedMatches devolve, numa lista só, os jogos dos times, ligas e jogos que a pessoa
+// segue: os de [from, to) e os que estão em andamento agora (um jogo que começou ontem à
+// noite ainda aparece). Um jogo que entra por dois caminhos (o time e a liga) vem uma vez.
+func GetFollowedMatches(ctx context.Context, teams []int64, leagues []string, matchIDs []int64, from, to time.Time) ([]models.Match, error) {
+	if teams == nil {
+		teams = []int64{}
+	}
+	if leagues == nil {
+		leagues = []string{}
+	}
+	if matchIDs == nil {
+		matchIDs = []int64{}
+	}
+	where := `
+    WHERE (m.api_home_team_id = ANY($1) OR m.api_away_team_id = ANY($1)
+           OR m.league = ANY($2) OR m.id = ANY($3))
+      AND ((m.match_date >= $4::timestamp AND m.match_date < $5::timestamp)
+           OR (m.status IN ('IN_PLAY', 'PAUSED')
+               AND m.match_date > (now() AT TIME ZONE 'UTC') - INTERVAL '6 hours'))
+    ORDER BY m.match_date ASC, m.id`
+	const layout = "2006-01-02 15:04:05" // match_date é UTC, sem fuso
+	return queryMatches(ctx, "GetFollowedMatches", where, pq.Array(teams), pq.Array(leagues),
+		pq.Array(matchIDs), from.UTC().Format(layout), to.UTC().Format(layout))
+}
+
 func queryMatches(ctx context.Context, name, where string, args ...interface{}) ([]models.Match, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -97,6 +126,8 @@ func queryMatches(ctx context.Context, name, where string, args ...interface{}) 
 			&m.MatchID,
 			&m.IDEvent,
 			&m.League,
+			&m.LeagueName,
+			&m.LeagueLogo,
 			&m.Season,
 			&m.Round,
 			&m.APIHomeTeamID,

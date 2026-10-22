@@ -129,6 +129,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 |---|---|---|
 | `GET /matches` | `league`, `[season]`, `[round]`, `[stage]`, `[date=YYYY-MM-DD]` | lista de jogos |
 | `GET /team/matches` | `id`, `[rounds=1,2,3]` | jogos do time na **temporada atual** de cada competição |
+| `GET /matches/following` | `teams=1783,1766`, `leagues=BSA,CLI`, `matches=4821`, `[past=1]`, `[days=7]` | "Meus jogos": os jogos de quem a pessoa segue (veja abaixo) |
 | `GET /h2h` | `team1`, `team2`, `[limit=10]` | confronto direto (veja abaixo) |
 | `GET /player/stats` | `id` (ID da ESPN, o mesmo do `/details?type=player`), `[season]` | estatísticas do jogador (veja abaixo) |
 | `GET /team/stats` | `id` (api_id), `[season]` | estatísticas do time na temporada (veja abaixo) |
@@ -232,9 +233,28 @@ lista vem ordenada por grupo e posição.
 recente. A busca acha pelo nome, pelo código (`pl`, `bsa`) e por apelidos sem acento
 obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo").
 
-**Jogo** (`/matches`, `/team/matches`), campos principais:
+### `GET /matches/following`: "Meus jogos"
+
+Os jogos de tudo o que a pessoa segue, numa chamada só, do mais cedo para o mais tarde:
+de `past` dias atrás (padrão 1: ontem; até 7) até `days` dias à frente (padrão 7; até
+14), no horário de Brasília, mais os jogos em andamento agora (um jogo que começou ontem
+às 23h ainda aparece). Mande pelo menos um de `teams` (api_id dos times, até 50),
+`leagues` (códigos, até 20) e `matches` (match_id, até 100); sem nenhum, dá 400.
+
+- Mande o que o app já sabe que a pessoa segue: as listas `teams`, `leagues` e `matches`
+  do `GET /push/subscriptions`. Pode juntar times e ligas favoritos que a pessoa marcou
+  sem ligar as notificações.
+- Um jogo que entra por dois caminhos (o time e a liga) vem uma vez só.
+- Cada jogo vem no mesmo formato do `/matches`, com `league_name` e `league_logo` para
+  mostrar de que competição é (as listas misturam ligas). Agrupe por dia no app.
+- Cache de 20 s, como o `/matches`. Mantenha a ordem dos IDs igual entre os pedidos
+  (ex: ordenados): a ordem faz parte do endereço, e endereço igual reaproveita o cache e
+  a etiqueta (`ETag`).
+
+**Jogo** (`/matches`, `/team/matches`, `/matches/following`), campos principais:
 ```json
 { "match_id": 4821, "id_event": "401861080", "league": "BSA", "season": "2026",
+  "league_name": "Brasileirão - Série A", "league_logo": "https://...",
   "round": 30, "stage": "REGULAR_SEASON", "group_name": "",
   "api_home_team_id": 1783, "home_team": "CR Flamengo", "home_logo": "https://...",
   "api_away_team_id": 1769, "away_team": "SE Palmeiras", "away_logo": "https://...",
