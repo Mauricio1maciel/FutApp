@@ -18,8 +18,8 @@
 
 - **CORS (versão web):** a API aceita chamadas de navegador de qualquer origem. O preflight
   (`OPTIONS`) responde `204` com `Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS` e
-  `Access-Control-Allow-Headers: Authorization, Content-Type`, sem precisar de token; o site
-  também pode ler o header `X-Cache`. Para limitar a domínios conhecidos, defina no servidor
+  `Access-Control-Allow-Headers: Authorization, Content-Type, If-None-Match`, sem precisar de
+  token; o site também pode ler os headers `X-Cache` e `ETag`. Para limitar a domínios conhecidos, defina no servidor
   `CORS_ALLOWED_ORIGINS` (separados por vírgula), ex:
   `https://futstatis.vercel.app,http://localhost:3000`. O app não manda `Origin` e não é afetado.
 
@@ -28,6 +28,16 @@
   elencos, temporadas, artilharia) de atraso. O header `X-Cache` diz `HIT` (veio da
   memória), `MISS` (veio do banco) ou `BYPASS` (admin, sempre fresco). Puxar para
   atualizar mais rápido que isso não traz dado novo.
+
+- **"Não mudou" (304), para gastar menos internet:** toda leitura (`GET`) que dá 200 vem
+  com o header `ETag` (ex: `W/"dcd1cd1a2138b85d"`), uma etiqueta do conteúdo, e
+  `Cache-Control: private, no-cache`. Mande a etiqueta de volta no próximo pedido do mesmo
+  endereço em `If-None-Match`: se nada mudou, a resposta é **304 sem corpo** (só os
+  headers) e vale a cópia que o app já tem; se mudou, vem 200 com o corpo e a etiqueta
+  nova. As rotas de admin e os erros não levam etiqueta. No navegador, o cache dele faz
+  isso sozinho; no app, quem faz é o código de busca (o React Native não faz sozinho no
+  Android). Nas telas que se atualizam sozinhas (jogos ao vivo, listas da tela inicial),
+  a maioria das respostas é igual à anterior, e é aí que o 304 economiza.
 
 ### Alerta de tamanho do banco
 
@@ -45,6 +55,7 @@ caso o plano mude.
 |---|---|
 | 200 | OK |
 | 202 | Ação de admin iniciada em background |
+| 304 | Nada mudou desde a etiqueta mandada em `If-None-Match`: use a cópia que já tem |
 | 400 | Parâmetro faltando ou inválido |
 | 401 | Sem token, token inválido/expirado, ou login errado |
 | 403 | Rota exclusiva de admin |
@@ -80,7 +91,7 @@ do Expo web. Nada muda para o app de celular, que não manda o header `Origin`.
   endereço, então a primeira chamada de cada endereço custa uma ida a mais.
 - Os erros (401, 404, 500) também vêm com CORS: o site consegue ler o `{"error": ...}` e
   renovar o token no 401, como o app faz.
-- O site pode ler o header `X-Cache`.
+- O site pode ler os headers `X-Cache` e `ETag`.
 - Login de convidado: o site precisa de um `device_id` próprio, guardado no
   `localStorage`, e usa o mesmo `POST /auth/guest`.
 - **Notificações no navegador:** funcionam pelo Web Push (veja "Push no navegador", na

@@ -42,15 +42,16 @@ func CORS(next http.Handler) http.Handler {
 			} else {
 				h.Set("Access-Control-Allow-Origin", origin)
 			}
-			// Deixa o site ler o X-Cache (HIT/MISS/BYPASS), como o app, e o Retry-After do 429
-			h.Set("Access-Control-Expose-Headers", "X-Cache, Retry-After")
+			// Deixa o site ler o X-Cache (HIT/MISS/BYPASS), como o app, o Retry-After do 429 e
+			// a etiqueta (ETag) para mandar de volta em If-None-Match
+			h.Set("Access-Control-Expose-Headers", "X-Cache, Retry-After, ETag")
 		}
 
 		isPreflight := r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != ""
 		if isPreflight {
 			if originAllowed {
 				h.Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-				h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+				h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-None-Match")
 				// O navegador guarda a liberação e não repete o preflight a cada chamada
 				h.Set("Access-Control-Max-Age", "86400")
 			}

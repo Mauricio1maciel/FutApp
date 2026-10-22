@@ -44,7 +44,7 @@ func TestCORSPreflightRespondidoSemPassarPelaAutenticacao(t *testing.T) {
 			t.Errorf("Allow-Methods sem %s: %q", method, h.Get("Access-Control-Allow-Methods"))
 		}
 	}
-	for _, header := range []string{"Authorization", "Content-Type"} {
+	for _, header := range []string{"Authorization", "Content-Type", "If-None-Match"} {
 		if !strings.Contains(h.Get("Access-Control-Allow-Headers"), header) {
 			t.Errorf("Allow-Headers sem %s: %q", header, h.Get("Access-Control-Allow-Headers"))
 		}
@@ -66,8 +66,8 @@ func TestCORSChamadaNormalLevaHeadersMesmoComErro(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized || rec.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Errorf("esperado 401 com Allow-Origin *, veio %d e %q", rec.Code, rec.Header().Get("Access-Control-Allow-Origin"))
 	}
-	if rec.Header().Get("Access-Control-Expose-Headers") != "X-Cache, Retry-After" {
-		t.Errorf("Expose-Headers esperado %q, veio %q", "X-Cache, Retry-After", rec.Header().Get("Access-Control-Expose-Headers"))
+	if rec.Header().Get("Access-Control-Expose-Headers") != "X-Cache, Retry-After, ETag" {
+		t.Errorf("Expose-Headers esperado %q, veio %q", "X-Cache, Retry-After, ETag", rec.Header().Get("Access-Control-Expose-Headers"))
 	}
 }
 

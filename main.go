@@ -176,7 +176,7 @@ func main() {
 	server := &http.Server{
 		Addr: ":" + porta,
 		// Limite de pedidos dentro do CORS: o 429 também sai com CORS (o site lê o erro)
-		Handler: middlewares.RequestLogger(middlewares.Recover(middlewares.CORS(middlewares.RateLimit(mux)))),
+		Handler: middlewares.RequestLogger(middlewares.Recover(middlewares.CORS(middlewares.RateLimit(middlewares.ETag(mux))))),
 
 		// Sem timeouts, um cliente lento segura a conexão para sempre
 		ReadHeaderTimeout: 10 * time.Second,
