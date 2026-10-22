@@ -44,6 +44,24 @@ em 22/09). Por isso:
 - o "atualizar jogos" do admin (`/matches?update=true`) roda em segundo plano e também
   reconfere a ESPN. Use-o se um jogo terminou e continua como marcado.
 
+## Aviso de jogo sem resultado
+
+A cada 30 minutos (a primeira volta, 10 minutos depois de o worker subir), o worker
+procura jogos que começaram há mais de 4 horas, nos últimos 3 dias, e continuam marcados
+ou em andamento. Para cada liga e dia desses jogos, busca de novo o placar na ESPN; o
+que continuar sem resultado vai por push para os aparelhos de admin, uma vez por jogo
+(a marca fica na tabela `alert_state`, então reiniciar o worker não repete o aviso). No
+log: `[JOBS] Sem resultado: ...`, com um dos motivos:
+- **na ESPN acabou X x Y, mas o resultado não chegou ao jogo**: o trigger não achou o
+  jogo. Quase sempre é o vínculo de um dos times com a ESPN (`teams.espn_team_id`) ou a
+  data do jogo diferente nas duas fontes;
+- **a ESPN não tem o jogo**: confira o vínculo dos times e a data;
+- **a ESPN também não atualizou**: as duas fontes pararam; tente o "atualizar jogos" do
+  admin mais tarde.
+
+Sem nenhum aparelho de admin, o aviso fica só no log e sai quando houver um (toque em
+"Enviar push de teste para este aparelho" na tela de admin do app).
+
 ## Aviso se o worker parar (healthchecks.io)
 
 O worker manda um sinal de vida a cada 5 minutos. Se o Orange Pi travar, ficar sem

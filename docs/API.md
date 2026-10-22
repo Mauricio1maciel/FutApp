@@ -49,6 +49,16 @@ tocou em "Enviar push de teste para este aparelho" na tela de admin; se o app fo
 reinstalado, é preciso tocar de novo. `DB_SIZE_LIMIT_MB` (padrão 500) muda o limite,
 caso o plano mude.
 
+### Aviso de jogo sem resultado
+
+A cada 30 minutos, o worker procura jogos que começaram há mais de 4 horas (nos últimos
+3 dias) e continuam marcados ou em andamento, sinal de que uma fonte parou. Antes de
+avisar, ele busca de novo na ESPN o placar daquele dia; o que continuar sem resultado
+vira um push para os aparelhos de admin (`type: "admin_alert"`, `alert: "stuck_matches"`),
+uma vez por jogo. Ex: *"⚠️ Jogo sem resultado"* | *"Palmeiras x Fluminense (CLI, 21/10
+21:30): na ESPN acabou 0 x 1, mas o resultado não chegou ao jogo."* Com mais de um jogo,
+o título traz quantos são e o texto fala do primeiro.
+
 ### Status usados
 
 | Status | Significado |
