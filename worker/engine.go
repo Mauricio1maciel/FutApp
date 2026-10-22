@@ -69,7 +69,10 @@ func processMatches() {
 		last, exists := lastFetched[match.IDEvent]
 		cooldown := 5 * time.Minute
 		if match.Status == "in" {
-			cooldown = 1 * time.Minute
+			// Menos que a volta do ticker (1 minuto): com 1 minuto exato, uma volta que
+			// chegasse uns milissegundos adiantada pulava o jogo, e o placar (e o aviso
+			// de gol) atrasava mais um minuto
+			cooldown = 50 * time.Second
 		}
 		if exists && time.Since(last) < cooldown {
 			continue
