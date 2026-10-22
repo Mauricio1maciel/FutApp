@@ -367,12 +367,13 @@ aviso. A entrega é pelo Expo Push.
 | Escalação (~30 min antes) | `Escalações confirmadas 📋` | `Flamengo x Palmeiras · começa às 21:30` |
 | Início | `Começou! ⚽` | `Flamengo x Palmeiras` |
 | Gol | `⚽ GOL! Flamengo` | `Flamengo 1 x 0 Palmeiras · Pedro 23'` (autor quando a ESPN já informou) |
+| Gol anulado | `❌ Gol anulado · Flamengo` | `Flamengo 0 x 0 Palmeiras` (placar de agora) |
 | Cartão vermelho | `🟥 Cartão vermelho · Palmeiras` | `Gustavo Gómez 38' · Flamengo 1 x 0 Palmeiras` |
 | Fim | `Fim de jogo` | `Flamengo 2 x 1 Palmeiras` (pênaltis: `1 (4) x (3) 1`) |
 
-**Tipos de aviso:** `lineup` (escalação confirmada), `start` (começou), `goal` (gol),
-`red_card` (cartão vermelho) e `end` (fim de jogo). Cada inscrição (time, liga ou jogo)
-recebe todos, a não ser que escolha:
+**Tipos de aviso:** `lineup` (escalação confirmada), `start` (começou), `goal` (gol e gol
+anulado), `red_card` (cartão vermelho) e `end` (fim de jogo). Cada inscrição (time, liga ou
+jogo) recebe todos, a não ser que escolha:
 ```json
 POST /push/subscriptions  { "team_id": 1783, "kinds": ["goal", "red_card", "end"] }
 ```
@@ -389,6 +390,13 @@ POST /push/subscriptions  { "team_id": 1783, "kinds": ["goal", "red_card", "end"
   "kinds": { "matches": {}, "teams": { "1783": ["goal", "end"] }, "leagues": {} },
   "available_kinds": ["lineup", "start", "goal", "red_card", "end"] }
 ```
+
+**Gol anulado:** quando o placar cai (o VAR anulou, ou a fonte corrigiu), quem recebe os
+avisos de gol recebe *"❌ Gol anulado · Flamengo"* com o placar de agora, e o gol seguinte
+do time volta a ser avisado. O aviso espera 3 minutos antes de sair: se o placar voltar
+nesse tempo, era oscilação da fonte e ele não sai. Depois do apito final não há aviso de
+gol anulado (o "Fim de jogo" já traz o placar certo). Não tem tipo próprio na inscrição:
+vem junto com `goal`.
 
 **Cartão vermelho:** *"🟥 Cartão vermelho · Palmeiras"* | *"Gustavo Gómez 38' · Flamengo
 1 x 0 Palmeiras"*. Um aviso por cartão, só com o jogo rolando (ou recém-acabado). Quando a
@@ -425,11 +433,12 @@ Cada notificação leva um `data` para o app abrir a tela do jogo ao ser tocada:
   "espn_match_id": "401861080", "espn_home": "819", "espn_away": "2029",
   "date": "2026-10-12T00:30:00Z" }
 ```
-`type` é `lineup`, `start`, `goal`, `red_card`, `end`, `test` ou `admin_alert`. `espn_match_id`, `espn_home`,
+`type` é `lineup`, `start`, `goal`, `goal_cancelled`, `red_card`, `end`, `test` ou `admin_alert`. `espn_match_id`, `espn_home`,
 `espn_away` e `date` só vêm quando o backend os conhece. Todos os valores são texto.
 
 Os avisos saem do worker em até ~1 minuto depois do lance (o tempo de a ESPN atualizar
-e o worker ler). Aviso que ficar mais de 15 minutos sem sair é descartado.
+e o worker ler); o de gol anulado, uns 3 minutos depois. Aviso que ficar mais de 15
+minutos sem sair é descartado.
 
 ## Admin
 

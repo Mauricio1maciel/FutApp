@@ -108,3 +108,45 @@ func TestESPNLevaPenaltisEVencedor(t *testing.T) {
 		t.Errorf("a volta seguinte da football-data parada não pode desfazer: %+v", e)
 	}
 }
+
+// Ao vivo, com a ESPN acompanhando o jogo, o placar atrasado da football-data não entra
+func TestSaveMatchAoVivoFicaComOPlacarDaESPN(t *testing.T) {
+	openTestDB(t)
+	ctx := context.Background()
+	const id = 7771201
+	inicio := time.Now().UTC().Add(-30 * time.Minute).Truncate(time.Minute)
+	salva := func(status string, casa, fora int) {
+		t.Helper()
+		if err := SaveMatch(ctx, id, tstLeague, "2026", 1, tstHome, tstAway, casa, fora, nil, nil,
+			inicio.Format("2006-01-02T15:04:05Z"), status, "REGULAR_SEASON", "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Sem a ESPN acompanhando, a football-data é a única fonte: a correção dela vale
+	salva("IN_PLAY", 1, 0)
+	salva("IN_PLAY", 0, 0)
+	if e := lerJogo(t, id); e.casa != 0 {
+		t.Fatalf("sem a ESPN, a correção da football-data deveria valer: %+v", e)
+	}
+
+	jogo := models.ESPNMatchDB{
+		MatchID: "9991201", League: tstLeague, Season: "2026", Status: "in",
+		MatchDate:      inicio.Format("2006-01-02T15:04Z"),
+		ESPNHomeTeamID: tstESPNHome, ESPNAwayTeamID: tstESPNAway, HomeScore: "1", AwayScore: "0",
+	}
+	if err := SaveFullMatchHistory(ctx, jogo, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	salva("IN_PLAY", 0, 0) // a football-data ainda não tem o gol
+	salva("PAUSED", 0, 0)
+	if e := lerJogo(t, id); e.status != "IN_PLAY" || e.casa != 1 {
+		t.Errorf("o placar atrasado da football-data passou por cima do da ESPN: %+v", e)
+	}
+
+	// O resultado final da football-data continua valendo
+	salva("FINISHED", 2, 0)
+	if e := lerJogo(t, id); e.status != "FINISHED" || e.casa != 2 {
+		t.Errorf("o resultado final da football-data deveria valer: %+v", e)
+	}
+}

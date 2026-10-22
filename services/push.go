@@ -27,6 +27,10 @@ const (
 	pushMaxAge = 15 * time.Minute
 	// O Expo/Firebase descartam a notificação se o celular ficar offline mais que isso
 	pushTTL = 3600
+	// O aviso de gol anulado espera isso na fila. O placar ao vivo é lido a cada minuto:
+	// se ele voltar nesse tempo (oscilação da fonte, mesmo com uma leitura perdida), o
+	// aviso é retirado antes de sair
+	pushCancelDelay = 3 * time.Minute
 )
 
 // Horário de Brasília (sem horário de verão desde 2019)
@@ -155,6 +159,16 @@ func pushText(p database.PendingPush) (string, string) {
 		}
 		return title, body
 
+	case "goal_cancelled":
+		title := "❌ Gols anulados"
+		switch p.GoalSide {
+		case "home":
+			title = "❌ Gol anulado · " + p.HomeTeam
+		case "away":
+			title = "❌ Gol anulado · " + p.AwayTeam
+		}
+		return title, placar
+
 	case "red_card":
 		title := "🟥 Cartão vermelho"
 		switch p.GoalSide {
@@ -224,7 +238,7 @@ func ProcessPushOutbox(ctx context.Context) {
 		utils.CustomLog("PUSH", "%d aviso(s) expirado(s) sem envio", n)
 	}
 
-	pending, err := database.GetPendingPushes(ctx, 50)
+	pending, err := database.GetPendingPushes(ctx, 50, pushCancelDelay)
 	if err != nil {
 		utils.CustomLog("PUSH", "Erro ao ler a fila de avisos: %v", err)
 		return

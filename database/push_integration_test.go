@@ -122,8 +122,8 @@ func TestPushJogoCompleto(t *testing.T) {
 
 	setScore(t, m, "IN_PLAY", 0, 0)  // começou
 	setScore(t, m, "IN_PLAY", 1, 0)  // gol da casa
-	setScore(t, m, "IN_PLAY", 0, 0)  // football-data regrava placar atrasado: nada
-	setScore(t, m, "IN_PLAY", 1, 0)  // ESPN corrige: o mesmo gol, nada
+	setScore(t, m, "IN_PLAY", 0, 0)  // placar oscila: aviso de gol anulado fica esperando
+	setScore(t, m, "IN_PLAY", 1, 0)  // volta antes de o aviso sair: é retirado, sem repetir o gol
 	setScore(t, m, "PAUSED", 1, 0)   // intervalo: nada
 	setScore(t, m, "IN_PLAY", 1, 1)  // gol de fora
 	setScore(t, m, "FINISHED", 2, 1) // gol no fim, junto com o apito
@@ -131,6 +131,72 @@ func TestPushJogoCompleto(t *testing.T) {
 	setScore(t, m, "FINISHED", 2, 1) // fim de novo: nada
 
 	assertOutbox(t, m, "start 0-0", "goal home 1-0", "goal away 1-1", "goal home 2-1", "end 2-1")
+}
+
+// O VAR anula o gol: o aviso sai depois da espera e o gol seguinte do time volta a ser
+// avisado (antes, o placar só voltava ao número já avisado e o gol passava em branco)
+func TestPushGolAnulado(t *testing.T) {
+	openTestDB(t)
+	ctx := context.Background()
+	m := newTestMatch(t, 7770014, 0, "TIMED", 0, 0)
+	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
+	newTestDevice(t, "teste-push-2", "ExponentPushToken[t2]")
+	SubscribeMatch(ctx, "teste-push-1", m, nil, false)
+	SubscribeMatch(ctx, "teste-push-2", m, []string{"end"}, true)
+
+	setScore(t, m, "IN_PLAY", 1, 0) // gol da casa
+	setScore(t, m, "IN_PLAY", 0, 0) // o VAR anula
+	setScore(t, m, "IN_PLAY", 0, 1) // gol de fora enquanto o aviso de anulado espera
+	assertOutbox(t, m, "start 1-0", "goal home 1-0", "goal_cancelled home 0-0", "goal away 0-1")
+
+	anulado := func() *PendingPush {
+		t.Helper()
+		pending, err := GetPendingPushes(ctx, 50, 3*time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range pending {
+			if p.MatchID == m && p.Kind == "goal_cancelled" {
+				return &p
+			}
+		}
+		return nil
+	}
+	if anulado() != nil {
+		t.Fatal("o aviso de gol anulado saiu antes da espera")
+	}
+	mustExec(t, `UPDATE push_outbox SET created_at = now() - INTERVAL '4 minutes'
+                 WHERE match_id = $1 AND kind = 'goal_cancelled'`, m)
+	p := anulado()
+	if p == nil {
+		t.Fatal("depois da espera, o aviso de gol anulado deveria sair")
+	}
+	if p.HomeScore != 0 || p.AwayScore != 1 {
+		t.Errorf("o aviso leva o placar de agora (0 x 1), veio %d x %d", p.HomeScore, p.AwayScore)
+	}
+	// Vai para quem recebe os avisos de gol, e só para eles
+	if tokens, _ := GetPushTokensForMatch(ctx, m, "goal_cancelled"); !reflect.DeepEqual(tokens, []string{"ExponentPushToken[t1]"}) {
+		t.Errorf("gol anulado: esperado só quem recebe gols, veio %v", tokens)
+	}
+	if err := MarkPushSent(ctx, p.ID, "ok 1/1"); err != nil {
+		t.Fatal(err)
+	}
+
+	setScore(t, m, "IN_PLAY", 1, 1) // agora vale: é avisado
+	assertOutbox(t, m, "start 1-0", "goal home 1-0", "goal_cancelled home 0-0", "goal away 0-1", "goal home 1-1")
+}
+
+// O fim de jogo retira o aviso de gol anulado que ainda esperava: o placar final já é o certo
+func TestPushGolAnuladoPerdeOSentidoNoFim(t *testing.T) {
+	openTestDB(t)
+	m := newTestMatch(t, 7770015, 0, "TIMED", 0, 0)
+	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
+	SubscribeMatch(context.Background(), "teste-push-1", m, nil, false)
+
+	setScore(t, m, "IN_PLAY", 1, 0)
+	setScore(t, m, "IN_PLAY", 0, 0)  // o VAR anula nos acréscimos
+	setScore(t, m, "FINISHED", 0, 0) // e o juiz apita antes de o aviso sair
+	assertOutbox(t, m, "start 1-0", "goal home 1-0", "end 0-0")
 }
 
 func TestPushSemSeguidores(t *testing.T) {
@@ -287,7 +353,7 @@ func TestPushAutorDoGol(t *testing.T) {
 	setScore(t, m, "IN_PLAY", 1, 0) // a ESPN já tem o gol: vai com o autor
 	setScore(t, m, "IN_PLAY", 2, 0) // a ESPN ainda não tem o 2º gol: sem autor
 
-	pending, err := GetPendingPushes(ctx, 10)
+	pending, err := GetPendingPushes(ctx, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -359,6 +359,9 @@ func ResolveMatchIDByESPN(ctx context.Context, espnMatchID int64) (int64, error)
 // GetPushTargetsForMatch devolve os aparelhos (app e navegador) que devem receber um
 // aviso desse tipo do jogo
 func GetPushTargetsForMatch(ctx context.Context, matchID int64, kind string) ([]PushTarget, error) {
+	if kind == "goal_cancelled" {
+		kind = "goal" // o gol anulado vai para quem recebe os avisos de gol
+	}
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
@@ -404,10 +407,10 @@ func GetPushTokensForMatch(ctx context.Context, matchID int64, kind string) ([]s
 type PendingPush struct {
 	ID          int64
 	MatchID     int64
-	Kind        string // lineup | start | goal | red_card | end
+	Kind        string // lineup | start | goal | goal_cancelled | red_card | end
 	HomeScore   int
 	AwayScore   int
-	GoalSide    string // gol: home | away | both; cartão vermelho: home | away | "" (lado desconhecido)
+	GoalSide    string // gol e gol anulado: home | away | both; cartão vermelho: home | away | "" (lado desconhecido)
 	HomePenalty *int
 	AwayPenalty *int
 	League      string
@@ -422,13 +425,19 @@ type PendingPush struct {
 	OwnGoal     bool
 }
 
-// GetPendingPushes devolve os avisos ainda não enviados, do mais antigo para o mais novo
-func GetPendingPushes(ctx context.Context, limit int) ([]PendingPush, error) {
+// GetPendingPushes devolve os avisos ainda não enviados, do mais antigo para o mais novo.
+// O de gol anulado só sai depois de cancelDelay na fila: se o placar voltar antes, era
+// oscilação da fonte, e o trigger o retira (migration 027). Ele leva o placar de agora,
+// porque outro gol pode ter saído enquanto esperava.
+func GetPendingPushes(ctx context.Context, limit int, cancelDelay time.Duration) ([]PendingPush, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
 	rows, err := DB.QueryContext(ctx, `
-        SELECT o.id, o.match_id, o.kind, o.home_score, o.away_score, o.goal_side,
+        SELECT o.id, o.match_id, o.kind,
+               CASE WHEN o.kind = 'goal_cancelled' THEN COALESCE(m.home_score, 0) ELSE o.home_score END,
+               CASE WHEN o.kind = 'goal_cancelled' THEN COALESCE(m.away_score, 0) ELSE o.away_score END,
+               o.goal_side,
                m.home_penalty, m.away_penalty,
                COALESCE(m.league, ''),
                COALESCE(NULLIF(th.short, ''), th.name, ''),
@@ -473,8 +482,9 @@ func GetPendingPushes(ctx context.Context, limit int) ([]PendingPush, error) {
             LIMIT 1
         ) gol ON true
         WHERE o.sent_at IS NULL
+          AND (o.kind <> 'goal_cancelled' OR o.created_at <= now() - $2 * INTERVAL '1 second')
         ORDER BY o.id
-        LIMIT $1`, limit)
+        LIMIT $1`, limit, cancelDelay.Seconds())
 	if err != nil {
 		utils.CustomLog("DB_ERRO", "Erro na query GetPendingPushes: %v", err)
 		return nil, err

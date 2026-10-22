@@ -38,6 +38,8 @@ A football-data às vezes para de atualizar uma competição (a Libertadores de 
 em 22/09). Por isso:
 - a gravação da football-data não volta um jogo para trás (encerrado → marcado) no
   mesmo horário: fica o resultado que a ESPN trouxe;
+- com o jogo em andamento e a ESPN acompanhando, o placar ao vivo da football-data (que
+  chega atrasado) não é gravado por cima do da ESPN; o resultado final dela vale;
 - toda madrugada o worker reconfere na ESPN os últimos 3 dias de cada liga;
 - o "atualizar jogos" do admin (`/matches?update=true`) roda em segundo plano e também
   reconfere a ESPN. Use-o se um jogo terminou e continua como marcado.

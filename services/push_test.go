@@ -32,6 +32,12 @@ func TestPushText(t *testing.T) {
 		{"dois gols na mesma leitura", func(p *database.PendingPush) {
 			p.Kind, p.GoalSide, p.HomeScore, p.AwayScore = "goal", "both", 2, 1
 		}, "⚽ GOLS!", "Flamengo 2 x 1 Palmeiras"},
+		{"gol anulado do mandante", func(p *database.PendingPush) {
+			p.Kind, p.GoalSide = "goal_cancelled", "home"
+		}, "❌ Gol anulado · Flamengo", "Flamengo 0 x 0 Palmeiras"},
+		{"gols anulados dos dois lados", func(p *database.PendingPush) {
+			p.Kind, p.GoalSide, p.HomeScore = "goal_cancelled", "both", 1
+		}, "❌ Gols anulados", "Flamengo 1 x 0 Palmeiras"},
 		{"fim nos pênaltis", func(p *database.PendingPush) {
 			p.Kind, p.HomeScore, p.AwayScore = "end", 1, 1
 			p.HomePenalty, p.AwayPenalty = pen(4), pen(3)
