@@ -138,7 +138,6 @@ func main() {
 	mux.HandleFunc("/push/subscriptions", middlewares.JWTAuth(handlers.PushSubscriptionsHandler))
 
 	// 🛡️ ROTAS ADMIN: usuário admin logado (/auth/login) ou header X-Admin-Key
-	mux.HandleFunc("/match_history_old", middlewares.AdminAuth(handlers.SyncPastMatchHandler))
 	mux.HandleFunc("/team/players_espn", middlewares.AdminAuth(handlers.SyncESPNTeamHandler))
 	mux.HandleFunc("/admin/sync-teams", middlewares.AdminAuth(handlers.SyncTeamsHandler))
 	mux.HandleFunc("/admin/force-sync", middlewares.AdminAuth(handlers.ForceSyncHistoryHandler))
