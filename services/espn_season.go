@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -88,4 +89,42 @@ func SyncESPNSeason(ctx context.Context, league string) (int, error) {
 		}
 	}
 	return len(days), nil
+}
+
+// SyncESPNRecentDays reconfere na ESPN os placares de hoje e dos últimos `days` dias. É a
+// rede de segurança das ligas da football-data: ela pode ficar parada (a Libertadores de
+// 2026 parou em 22/09) e o placar ao vivo só olha o dia de hoje, então um jogo que
+// terminou depois da meia-noite, ou que o worker perdeu, ficava sem resultado.
+func SyncESPNRecentDays(ctx context.Context, league string, days int) {
+	today := time.Now()
+	for d := -days; d <= 0; d++ {
+		if ctx.Err() != nil {
+			return
+		}
+		SyncESPNScoreboardForDate(ctx, league, today.AddDate(0, 0, d).Format("20060102"))
+		time.Sleep(300 * time.Millisecond) // não martelar a ESPN
+	}
+}
+
+// UpdateLeagueNow é a atualização de uma liga que o admin pede: a football-data (se a liga
+// vem dela) e os últimos 3 dias na ESPN; liga só da ESPN, a temporada inteira. Depois,
+// a classificação.
+func UpdateLeagueNow(ctx context.Context, league string) {
+	espnOnly, _ := database.GetESPNOnlyLeagues(ctx)
+	if slices.Contains(espnOnly, league) {
+		if _, err := SyncESPNSeason(ctx, league); err != nil {
+			utils.CustomLog("JOBS", "[%s] Erro na atualização pedida pelo admin: %v", league, err)
+		}
+	} else {
+		if err := SyncFootballDataMatches(ctx, league); err != nil {
+			utils.CustomLog("JOBS", "[%s] Erro na football-data (atualização do admin): %v", league, err)
+		}
+		SyncESPNRecentDays(ctx, league, 3)
+	}
+	if season := database.GetLatestSeason(ctx, league); season != "" {
+		if err := RecalculateStandings(ctx, league, season); err != nil {
+			utils.CustomLog("JOBS", "[%s] Erro ao recalcular a classificação: %v", league, err)
+		}
+	}
+	utils.CustomLog("JOBS", "[%s] Atualização pedida pelo admin concluída", league)
 }

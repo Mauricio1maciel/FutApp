@@ -126,6 +126,17 @@ func GetMatchesByLeague(ctx context.Context, league string, season string, f Mat
 	return matches, nil
 }
 
+// fdRegresses: a football-data mandou um estado anterior ao que já temos para o mesmo
+// horário (marcado < em andamento < encerrado). Ela às vezes fica parada: a Libertadores
+// de 2026 parou de ser atualizada em 22/09, e a cada volta regravava "marcado, 0 x 0" em
+// cima do resultado que a ESPN tinha trazido. Nesse caso fica o que já temos (placar,
+// pênaltis, situação e vencedor). Adiamento, cancelamento e mudança de data valem sempre.
+const fdRegresses = `(date_trunc('minute', matches.match_date) = date_trunc('minute', EXCLUDED.match_date)
+          AND (CASE EXCLUDED.status WHEN 'FINISHED' THEN 2 WHEN 'IN_PLAY' THEN 1 WHEN 'PAUSED' THEN 1
+                                    WHEN 'SCHEDULED' THEN 0 WHEN 'TIMED' THEN 0 ELSE 99 END)
+            < (CASE matches.status WHEN 'FINISHED' THEN 2 WHEN 'IN_PLAY' THEN 1 WHEN 'PAUSED' THEN 1
+                                    WHEN 'SCHEDULED' THEN 0 WHEN 'TIMED' THEN 0 ELSE -1 END))`
+
 func SaveMatch(ctx context.Context,
 	idEvent int64,
 	league string,
@@ -150,19 +161,19 @@ func SaveMatch(ctx context.Context,
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11, '')::TIMESTAMP,$12,$13,$14,$15)
     ON CONFLICT (id_event, league) 
     DO UPDATE SET
-         home_score = EXCLUDED.home_score,
-         away_score = EXCLUDED.away_score,
-         home_penalty = EXCLUDED.home_penalty, 
-         away_penalty = EXCLUDED.away_penalty,
+         home_score = CASE WHEN ` + fdRegresses + ` THEN matches.home_score ELSE EXCLUDED.home_score END,
+         away_score = CASE WHEN ` + fdRegresses + ` THEN matches.away_score ELSE EXCLUDED.away_score END,
+         home_penalty = CASE WHEN ` + fdRegresses + ` THEN matches.home_penalty ELSE EXCLUDED.home_penalty END,
+         away_penalty = CASE WHEN ` + fdRegresses + ` THEN matches.away_penalty ELSE EXCLUDED.away_penalty END,
          match_date = EXCLUDED.match_date,
          season = EXCLUDED.season,
-         status = EXCLUDED.status,
+         status = CASE WHEN ` + fdRegresses + ` THEN matches.status ELSE EXCLUDED.status END,
          round = EXCLUDED.round,
          api_home_team_id = EXCLUDED.api_home_team_id,
          api_away_team_id = EXCLUDED.api_away_team_id,
          stage = EXCLUDED.stage,
          group_name = EXCLUDED.group_name,
-		 winner = EXCLUDED.winner
+		 winner = CASE WHEN ` + fdRegresses + ` THEN matches.winner ELSE EXCLUDED.winner END
     `
 
 	_, err := DB.ExecContext(ctx,

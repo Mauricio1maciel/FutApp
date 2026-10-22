@@ -5,9 +5,12 @@ import (
 	"App-Futebol/middlewares"
 	"App-Futebol/services"
 	"App-Futebol/utils"
+	"context"
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
+	"time"
 )
 
 func MatchesHandler(w http.ResponseWriter, r *http.Request) {
@@ -25,10 +28,15 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if forceUpdate {
-		utils.CustomLog("API", "Admin forçou atualização dos jogos: %s", league)
-		if err := services.SyncFootballDataMatches(r.Context(), league); err != nil {
-			log.Printf("Erro ao atualizar jogos na football-data: %v", err)
+		// Em segundo plano: a atualização de uma liga leva mais que o tempo-limite do app
+		// (15 s), e o pedido cancelado interrompia a gravação no meio. A resposta sai na
+		// hora, com os dados atuais; os novos aparecem em cerca de um minuto
+		state := "running"
+		if startLeagueUpdate(league) {
+			state = "started"
+			utils.CustomLog("API", "Admin pediu a atualização dos jogos: %s", league)
 		}
+		w.Header().Set("X-Update", state)
 	}
 
 	season = services.ResolveSeason(r.Context(), league, season)
@@ -71,4 +79,27 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.WriteJSON(w, http.StatusOK, matches)
+}
+
+// Atualizações de liga pedidas pelo admin em andamento (uma por liga de cada vez)
+var leagueUpdates sync.Map
+
+// updateLeague roda a atualização (variável para os testes trocarem)
+var updateLeague = func(league string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	services.UpdateLeagueNow(ctx, league)
+}
+
+// startLeagueUpdate dispara a atualização da liga em segundo plano. false = já havia uma
+// rodando para essa liga.
+func startLeagueUpdate(league string) bool {
+	if _, running := leagueUpdates.LoadOrStore(league, true); running {
+		return false
+	}
+	go func() {
+		defer leagueUpdates.Delete(league)
+		updateLeague(league)
+	}()
+	return true
 }

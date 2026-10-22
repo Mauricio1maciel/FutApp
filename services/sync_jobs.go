@@ -36,6 +36,12 @@ func SyncFootballDataSeason(ctx context.Context, league string, seasonYear int) 
 
 	saved := 0
 	for _, m := range apiMatches {
+		if err := ctx.Err(); err != nil {
+			// Cancelado (ex: o pedido do admin caiu): parar já, em vez de tentar cada jogo
+			// restante e encher o log de "context canceled"
+			utils.CustomLog("JOBS", "[%s] Football-Data interrompida: %d/%d jogos gravados", league, saved, len(apiMatches))
+			return err
+		}
 		homeScore, awayScore := 0, 0
 		var homePen, awayPen *int
 		if m.Score.FullTime.Home != nil {

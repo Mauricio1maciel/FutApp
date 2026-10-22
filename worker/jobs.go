@@ -139,6 +139,12 @@ func RunDailySync() {
 
 	syncESPNOnlySeasons(ctx)
 
+	// Rede de segurança das ligas da football-data: ela pode ficar parada e o placar ao
+	// vivo só olha o dia de hoje. Reconfere na ESPN os últimos 3 dias de cada uma
+	for _, league := range services.FootballDataLeagues {
+		services.SyncESPNRecentDays(ctx, league, 3)
+	}
+
 	utils.CustomLog("JOBS", "Sincronização diária finalizada!")
 }
 

@@ -54,6 +54,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 023_push_no_navegador | ✅ |
 | 024_serie_b_playoffs_de_acesso | ✅ |
 | 025_junta_clubes_duplicados | ✅ |
+| 026_espn_leva_penaltis_e_vencedor | ⏳ |
 
 ## Testes de integração
 

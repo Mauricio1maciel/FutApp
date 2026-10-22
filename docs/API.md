@@ -438,7 +438,7 @@ Com token de convidado eles são **ignorados**, e a rota responde normalmente co
 
 | Rota | Parâmetro | Efeito |
 |---|---|---|
-| `/matches` | `update=true` | busca os jogos na football-data antes de responder |
+| `/matches` | `update=true` | atualiza a liga **em segundo plano**: football-data e os últimos 3 dias na ESPN (liga só da ESPN: a temporada inteira) e a classificação. A resposta sai na hora, com os dados atuais e o header `X-Update: started` (ou `running`, se já havia uma rodando para a liga); os dados novos aparecem em cerca de 1 minuto |
 | `/standings` | `update=true` | recalcula a classificação |
 | `/league/stats` | `update=true` | atualiza artilharia e assistências na ESPN |
 | `/match/history` | `force_update=true` | busca escalação e eventos na ESPN |

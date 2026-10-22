@@ -32,6 +32,16 @@ não um por pedido).
 
 `RATE_LIMIT=off` no Render desliga o limite sem precisar de deploy.
 
+## Quando a football-data fica parada
+
+A football-data às vezes para de atualizar uma competição (a Libertadores de 2026 parou
+em 22/09). Por isso:
+- a gravação da football-data não volta um jogo para trás (encerrado → marcado) no
+  mesmo horário: fica o resultado que a ESPN trouxe;
+- toda madrugada o worker reconfere na ESPN os últimos 3 dias de cada liga;
+- o "atualizar jogos" do admin (`/matches?update=true`) roda em segundo plano e também
+  reconfere a ESPN. Use-o se um jogo terminou e continua como marcado.
+
 ## Aviso se o worker parar (healthchecks.io)
 
 O worker manda um sinal de vida a cada 5 minutos. Se o Orange Pi travar, ficar sem
