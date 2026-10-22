@@ -3,11 +3,10 @@ package handlers
 
 import (
 	"App-Futebol/database"
+	"App-Futebol/middlewares"
 	"App-Futebol/utils"
 	"encoding/json"
-	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -69,16 +68,9 @@ var (
 	loginAttemptsMu sync.Mutex
 )
 
-func clientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		return strings.TrimSpace(strings.Split(fwd, ",")[0])
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
+// clientIP: o endereço real do cliente (Cloudflare primeiro; o X-Forwarded-For sozinho
+// podia ser inventado pelo cliente para driblar o bloqueio de tentativas de login)
+func clientIP(r *http.Request) string { return middlewares.ClientIP(r) }
 
 func loginBlocked(ip string) bool {
 	loginAttemptsMu.Lock()

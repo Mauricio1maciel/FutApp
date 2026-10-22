@@ -55,6 +55,22 @@ caso o plano mude.
 | 500 | Erro interno |
 | 502 | A API externa (ESPN/football-data) falhou numa ação de admin |
 
+## Limite de pedidos
+
+Para proteger o servidor (plano grátis), cada endereço tem um limite de pedidos por
+minuto. Uso normal do app e do site não chega perto:
+
+| Rotas | Limite por endereço |
+|---|---|
+| `/auth/guest`, `/auth/login` | 20 por minuto (10 seguidos) |
+| `/search`, `/player/stats`, `/team/stats`, `/h2h`, `/standings?live=true` | 60 por minuto (30 seguidos) |
+| as demais (menos `/health`) | 240 por minuto (120 seguidos) |
+
+Passou do limite: **429** com `{"error": "Muitos pedidos em pouco tempo. Tente de novo em N s."}`
+e o header `Retry-After` (segundos). O app deve esperar esse tempo antes de tentar de
+novo (e, enquanto isso, mostrar a cópia guardada, se tiver). Toda resposta das rotas
+com limite traz `X-RateLimit-Limit` e `X-RateLimit-Remaining`.
+
 ## Versão web (navegador)
 
 A API aceita chamadas do site em qualquer domínio (CORS), inclusive `http://localhost:8081`

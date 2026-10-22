@@ -22,7 +22,7 @@ var ActiveLogs = map[string]bool{
 	"WORKER_BUSCA_ESCALACAO": true,
 	"SCOREBOARD":             false,
 	"UNL":                    false,
-	"RATE_LIMIT":             false,
+	"RATE_LIMIT":             true,
 	"SYNC_TEAMS":             false,
 	"JOBS":                   true,
 	"HTTP":                   true,

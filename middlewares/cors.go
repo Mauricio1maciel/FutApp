@@ -42,8 +42,8 @@ func CORS(next http.Handler) http.Handler {
 			} else {
 				h.Set("Access-Control-Allow-Origin", origin)
 			}
-			// Deixa o site ler o X-Cache (HIT/MISS/BYPASS), como o app
-			h.Set("Access-Control-Expose-Headers", "X-Cache")
+			// Deixa o site ler o X-Cache (HIT/MISS/BYPASS), como o app, e o Retry-After do 429
+			h.Set("Access-Control-Expose-Headers", "X-Cache, Retry-After")
 		}
 
 		isPreflight := r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != ""

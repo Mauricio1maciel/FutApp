@@ -20,6 +20,18 @@ Além das do banco (`DB_*`), do `API_TOKEN` da football-data e do `JWT_SECRET`:
 | `PG_DUMP_PATH` | Caminho do `pg_dump`, se não estiver no PATH. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Push no navegador (versão web). As **mesmas três** no worker e no Render: o worker manda os avisos, a API registra os navegadores e faz o teste do admin. Gere uma vez com `go run . -gerar-vapid`; trocar as chaves invalida a inscrição de todos os navegadores. Sem elas, só o push do app funciona. Ao subir, o worker confere se a chave dele é a mesma que a API entrega (log `Chave do push no navegador confere com a API ✓`); se não for, avisa no log e por push ao admin, porque com chaves diferentes o serviço de push recusa todos os avisos do worker (403). |
 
+## Limite de pedidos (API no Render)
+
+A API limita os pedidos por endereço (detalhes no `docs/API.md`). O endereço do cliente
+vem do `CF-Connecting-IP`, que a Cloudflare (na frente do Render) preenche e o cliente
+não consegue falsificar; se ele não vier, do `X-Forwarded-For`. Se o endereço vier
+interno (ex: o proxy mudou de comportamento), o limite não se aplica, para nunca juntar
+todo mundo num balde só, e o log avisa uma vez: `Endereço do cliente não identificado`.
+Bloqueios aparecem no log como `[RATE_LIMIT] Limite ... atingido` (um por endereço,
+não um por pedido).
+
+`RATE_LIMIT=off` no Render desliga o limite sem precisar de deploy.
+
 ## Aviso se o worker parar (healthchecks.io)
 
 O worker manda um sinal de vida a cada 5 minutos. Se o Orange Pi travar, ficar sem

@@ -66,8 +66,8 @@ func TestCORSChamadaNormalLevaHeadersMesmoComErro(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized || rec.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Errorf("esperado 401 com Allow-Origin *, veio %d e %q", rec.Code, rec.Header().Get("Access-Control-Allow-Origin"))
 	}
-	if rec.Header().Get("Access-Control-Expose-Headers") != "X-Cache" {
-		t.Errorf("Expose-Headers esperado X-Cache, veio %q", rec.Header().Get("Access-Control-Expose-Headers"))
+	if rec.Header().Get("Access-Control-Expose-Headers") != "X-Cache, Retry-After" {
+		t.Errorf("Expose-Headers esperado %q, veio %q", "X-Cache, Retry-After", rec.Header().Get("Access-Control-Expose-Headers"))
 	}
 }
 

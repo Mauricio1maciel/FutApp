@@ -174,8 +174,9 @@ func main() {
 
 	// CORS antes das rotas: o preflight do navegador (site) é respondido sem passar pelo JWTAuth
 	server := &http.Server{
-		Addr:    ":" + porta,
-		Handler: middlewares.RequestLogger(middlewares.Recover(middlewares.CORS(mux))),
+		Addr: ":" + porta,
+		// Limite de pedidos dentro do CORS: o 429 também sai com CORS (o site lê o erro)
+		Handler: middlewares.RequestLogger(middlewares.Recover(middlewares.CORS(middlewares.RateLimit(mux)))),
 
 		// Sem timeouts, um cliente lento segura a conexão para sempre
 		ReadHeaderTimeout: 10 * time.Second,
