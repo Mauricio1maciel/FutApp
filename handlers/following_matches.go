@@ -14,8 +14,8 @@ var brasilia = time.FixedZone("BRT", -3*60*60)
 
 // FollowingMatchesHandler devolve os jogos de quem a pessoa segue, numa chamada só ("Meus
 // jogos" na tela inicial): GET /matches/following?teams=1783,1766&leagues=BSA&matches=4821
-// [&past=1&days=7]. Vêm os jogos de `past` dias atrás até `days` dias à frente (no horário
-// de Brasília) e os que estão em andamento.
+// [&past=0&days=0]. Por padrão, só os jogos de hoje (no horário de Brasília) e os que estão
+// em andamento; past e days abrem a janela para dias atrás e à frente.
 //
 // O app manda o que segue (as listas do GET /push/subscriptions), em vez de o servidor
 // procurar pelo aparelho: assim a resposta só depende do endereço e entra no cache, e o
@@ -34,7 +34,7 @@ func FollowingMatchesHandler(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusBadRequest, "Informe o que a pessoa segue: teams, leagues ou matches")
 		return
 	}
-	past, days := 1, 7
+	past, days := 0, 0 // só hoje
 	if n, err := strconv.Atoi(q.Get("past")); err == nil && n >= 0 && n <= 7 {
 		past = n
 	}

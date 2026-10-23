@@ -139,7 +139,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 |---|---|---|
 | `GET /matches` | `league`, `[season]`, `[round]`, `[stage]`, `[date=YYYY-MM-DD]` | lista de jogos |
 | `GET /team/matches` | `id`, `[rounds=1,2,3]` | jogos do time na **temporada atual** de cada competição |
-| `GET /matches/following` | `teams=1783,1766`, `leagues=BSA,CLI`, `matches=4821`, `[past=1]`, `[days=7]` | "Meus jogos": os jogos de quem a pessoa segue (veja abaixo) |
+| `GET /matches/following` | `teams=1783,1766`, `leagues=BSA,CLI`, `matches=4821`, `[past=0]`, `[days=0]` | "Meus jogos": os jogos de quem a pessoa segue (veja abaixo) |
 | `GET /h2h` | `team1`, `team2`, `[limit=10]` | confronto direto (veja abaixo) |
 | `GET /player/stats` | `id` (ID da ESPN, o mesmo do `/details?type=player`), `[season]` | estatísticas do jogador (veja abaixo) |
 | `GET /team/stats` | `id` (api_id), `[season]` | estatísticas do time na temporada (veja abaixo) |
@@ -278,10 +278,10 @@ obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo"
 
 ### `GET /matches/following`: "Meus jogos"
 
-Os jogos de tudo o que a pessoa segue, numa chamada só, do mais cedo para o mais tarde:
-de `past` dias atrás (padrão 1: ontem; até 7) até `days` dias à frente (padrão 7; até
-14), no horário de Brasília, mais os jogos em andamento agora (um jogo que começou ontem
-às 23h ainda aparece). Mande pelo menos um de `teams` (api_id dos times, até 50),
+Os jogos de hoje (no horário de Brasília) de tudo o que a pessoa segue, numa chamada só,
+do mais cedo para o mais tarde, mais os jogos em andamento agora (um jogo que começou
+ontem às 23h ainda aparece). Sem jogo hoje, vem `[]`. Para abrir a janela: `past` (dias
+atrás, até 7) e `days` (dias à frente, até 14), ambos com padrão 0. Mande pelo menos um de `teams` (api_id dos times, até 50),
 `leagues` (códigos, até 20) e `matches` (match_id, até 100); sem nenhum, dá 400.
 
 - Mande o que o app já sabe que a pessoa segue: as listas `teams`, `leagues` e `matches`
@@ -289,7 +289,7 @@ de `past` dias atrás (padrão 1: ontem; até 7) até `days` dias à frente (pad
   sem ligar as notificações.
 - Um jogo que entra por dois caminhos (o time e a liga) vem uma vez só.
 - Cada jogo vem no mesmo formato do `/matches`, com `league_name` e `league_logo` para
-  mostrar de que competição é (as listas misturam ligas). Agrupe por dia no app.
+  mostrar de que competição é (as listas misturam ligas). Com `past`/`days`, agrupe por dia no app.
 - Cache de 20 s, como o `/matches`. Mantenha a ordem dos IDs igual entre os pedidos
   (ex: ordenados): a ordem faz parte do endereço, e endereço igual reaproveita o cache e
   a etiqueta (`ETag`).
