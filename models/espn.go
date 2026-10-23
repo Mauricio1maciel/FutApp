@@ -38,8 +38,11 @@ type ESPNCompetition struct {
 }
 
 type ESPNStatus struct {
-	DisplayClock string `json:"displayClock"`
+	Clock        float64 `json:"clock"` // segundos de jogo (1200 = 20 minutos)
+	DisplayClock string  `json:"displayClock"`
+	Period       int     `json:"period"` // 1 e 2: tempos; 3 e 4: prorrogação; 5: pênaltis
 	Type         struct {
+		Name  string `json:"name"` // ex: STATUS_FIRST_HALF, STATUS_HALFTIME, STATUS_SHOOTOUT
 		State string `json:"state"`
 	} `json:"type"`
 }
@@ -68,6 +71,17 @@ type AppLiveMatch struct {
 	MatchDate  string `json:"match_date"`
 	State      string `json:"state"`
 	Clock      string `json:"clock"`
+
+	// Relógio para o app contar sozinho entre uma atualização e outra: os segundos de
+	// jogo na hora em que a ESPN foi lida (clock_at). Parado no intervalo e nos pênaltis
+	ClockSeconds int    `json:"clock_seconds"`
+	Period       int    `json:"period"`
+	ClockRunning bool   `json:"clock_running"`
+	ClockAt      string `json:"clock_at,omitempty"`
+
+	// Disputa de pênaltis, parcial durante a disputa (nil = não houve)
+	HomePenalty *int `json:"home_penalty,omitempty"`
+	AwayPenalty *int `json:"away_penalty,omitempty"`
 
 	Stage     string `json:"stage"`
 	GroupName string `json:"group_name"`

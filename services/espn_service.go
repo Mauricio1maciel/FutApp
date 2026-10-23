@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 )
 
 var ESPNLeagueMap = map[string]string{
@@ -49,7 +50,11 @@ func GetLiveScoreboard(leagueCode string, date string) ([]models.AppLiveMatch, e
 	if err := json.Unmarshal(body, &data); err != nil {
 		return nil, fmt.Errorf("erro unmarshal scoreboard: %v", err)
 	}
+	return liveMatchesFromScoreboard(data, time.Now()), nil
+}
 
+// liveMatchesFromScoreboard monta os jogos do placar da ESPN lido em fetchedAt
+func liveMatchesFromScoreboard(data models.ESPNScoreboard, fetchedAt time.Time) []models.AppLiveMatch {
 	var leagueName, leagueLogo string
 	if len(data.Leagues) > 0 {
 		leagueName = data.Leagues[0].Name
@@ -67,13 +72,17 @@ func GetLiveScoreboard(leagueCode string, date string) ([]models.AppLiveMatch, e
 
 		comp := event.Competitions[0]
 		match := models.AppLiveMatch{
-			MatchID:    event.ID,
-			IDEvent:    event.ID,
-			LeagueName: leagueName,
-			LeagueLogo: leagueLogo,
-			MatchDate:  event.Date,
-			State:      comp.Status.Type.State,
-			Clock:      comp.Status.DisplayClock,
+			MatchID:      event.ID,
+			IDEvent:      event.ID,
+			LeagueName:   leagueName,
+			LeagueLogo:   leagueLogo,
+			MatchDate:    event.Date,
+			State:        comp.Status.Type.State,
+			Clock:        comp.Status.DisplayClock,
+			ClockSeconds: int(comp.Status.Clock),
+			Period:       comp.Status.Period,
+			ClockRunning: clockRunning(comp.Status),
+			ClockAt:      fetchedAt.UTC().Format(time.RFC3339),
 		}
 
 		if match.Clock == "" || match.Clock == "0'" {
@@ -86,18 +95,34 @@ func GetLiveScoreboard(leagueCode string, date string) ([]models.AppLiveMatch, e
 				match.HomeLogo = competitor.Team.Logo
 				match.HomeScore = competitor.Score
 				match.ESPNHomeTeamID = competitor.Team.ID
+				match.HomePenalty = shootout(competitor.ShootoutScore)
 			} else {
 				match.AwayTeam = competitor.Team.DisplayName
 				match.AwayLogo = competitor.Team.Logo
 				match.AwayScore = competitor.Score
 				match.ESPNAwayTeamID = competitor.Team.ID
+				match.AwayPenalty = shootout(competitor.ShootoutScore)
 			}
 		}
 
 		liveMatches = append(liveMatches, match)
 	}
 
-	return liveMatches, nil
+	return liveMatches
+}
+
+// clockRunning: o relógio só anda com a bola rolando. No intervalo, entre o tempo normal e
+// a prorrogação e nos pênaltis (período 5), ele fica parado
+func clockRunning(st models.ESPNStatus) bool {
+	if st.Type.State != "in" || st.Period >= 5 {
+		return false
+	}
+	switch st.Type.Name {
+	case "STATUS_HALFTIME", "STATUS_HALFTIME_ET", "STATUS_END_PERIOD", "STATUS_END_OF_REGULATION",
+		"STATUS_END_OF_EXTRATIME", "STATUS_SHOOTOUT", "STATUS_DELAYED", "STATUS_SUSPENDED":
+		return false
+	}
+	return true
 }
 
 func UpdateMatchFromESPN(ctx context.Context, home, away, dateStr, leagueCode string) error {

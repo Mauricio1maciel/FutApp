@@ -146,7 +146,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /player/stats` | `id` (ID da ESPN, o mesmo do `/details?type=player`), `[season]` | estatísticas do jogador (veja abaixo) |
 | `GET /team/stats` | `id` (api_id), `[season]` | estatísticas do time na temporada (veja abaixo) |
 | `GET /matches/calendar` | `leagues=BSA,PL`, `month=MM`, `year=YYYY` | `[{"date", "count"}]` |
-| `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s). Aqui `id_event` **e** `match_id` são o ID da ESPN |
+| `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s), com o relógio e os pênaltis da disputa (veja abaixo). Aqui `id_event` **e** `match_id` são o ID da ESPN |
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
 | `GET /standings` | `league`, `[season]` | lista de posições |
 | `GET /standings?live=true` | `league`, `[season]` | a classificação **ao vivo** (veja abaixo) |
@@ -277,6 +277,27 @@ lista vem ordenada por grupo e posição.
 `code` é o valor do parâmetro `league` das outras rotas, e `season` é a temporada mais
 recente. A busca acha pelo nome, pelo código (`pl`, `bsa`) e por apelidos sem acento
 obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo").
+
+### `GET /matches/live`: relógio e pênaltis ao vivo
+
+Além do `clock` (o texto da ESPN, ex: `"35'"`), cada jogo traz o que o app precisa para o
+relógio andar sozinho entre uma atualização e outra:
+```json
+{ "state": "in", "clock": "35'", "clock_seconds": 2100, "period": 1,
+  "clock_running": true, "clock_at": "2026-10-23T23:06:56Z",
+  "home_penalty": 2, "away_penalty": 3 }
+```
+- `clock_seconds`: segundos de jogo quando a ESPN foi lida, em `clock_at` (UTC). A resposta
+  fica até 30 s no cache: conte a partir de `clock_at`, não da hora em que o app recebeu.
+- `period`: 1 e 2 são os tempos; 3 e 4, a prorrogação; 5, a disputa de pênaltis.
+- `clock_running`: `false` no intervalo, entre o tempo normal e a prorrogação, nos pênaltis
+  e com o jogo parado. Aí mostre o `clock` (ou "Intervalo"/"Pênaltis") sem contar.
+- Com o relógio andando: minuto = (clock_seconds + segundos desde clock_at) / 60, para
+  baixo. Passou de 45 no 1º tempo, de 90 no 2º, de 105 e de 120 na prorrogação? Mostre os
+  acréscimos: "45+2'", "90+4'". A ESPN atualiza o relógio de minuto em minuto: a próxima
+  resposta corrige o que o app contou.
+- `home_penalty`/`away_penalty`: o placar da disputa de pênaltis, parcial durante a
+  disputa; só vêm quando houve disputa.
 
 ### `GET /matches/following`: "Meus jogos"
 
