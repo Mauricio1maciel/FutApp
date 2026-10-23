@@ -26,18 +26,21 @@ import (
 //   - 04:00: backup do banco no Orange Pi, mantendo as últimas 7 cópias
 //   - Jogos que já deviam ter acabado e continuam sem resultado: a cada 30 minutos busca
 //     o dia de novo na ESPN e avisa o admin dos que continuarem assim
+//
+// Cada laço roda sob supervise (worker/protect.go): um pânico é registrado e o laço
+// recomeça, em vez de derrubar o worker inteiro.
 func startDataJobs() {
-	go loopFootballDataMatches()
-	go loopMissingMatches()
-	go loopLeagueStats()
-	go loopDaily()
-	go loopPushNotifications()
-	go loopKeepAPIAwake()
-	go loopDatabaseSize()
-	go loopHealthcheck()
-	go loopBackup()
-	go checkWebPushKeys()
-	go loopStuckMatches()
+	go supervise("football-data", loopFootballDataMatches)
+	go supervise("jogos sem detalhes", loopMissingMatches)
+	go supervise("artilharia", loopLeagueStats)
+	go supervise("rotina diária", loopDaily)
+	go supervise("avisos push", loopPushNotifications)
+	go supervise("API acordada", loopKeepAPIAwake)
+	go supervise("tamanho do banco", loopDatabaseSize)
+	go supervise("sinal de vida", loopHealthcheck)
+	go supervise("backup", loopBackup)
+	go protect("chaves do push no navegador", checkWebPushKeys)
+	go supervise("jogos sem resultado", loopStuckMatches)
 }
 
 func loopFootballDataMatches() {
@@ -186,7 +189,7 @@ func StartDailySync() bool {
 	}
 	go func() {
 		defer dailySyncRunning.Store(false)
-		RunDailySync()
+		protect("sincronização diária", RunDailySync)
 	}()
 	return true
 }

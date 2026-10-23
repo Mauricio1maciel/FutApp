@@ -5,6 +5,7 @@ import (
 	"App-Futebol/services"
 	"context"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -16,16 +17,36 @@ func StartEngine() {
 
 	startDataJobs()
 
-	processMatches()
-	lastEngineRun.Store(time.Now().Unix())
-
+	// Volta protegida: um pânico numa volta não para as próximas. O sinal de vida só conta
+	// a volta que terminou (com pânico em toda volta, ele acusa o laço parado)
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
-
-	for range ticker.C {
-		processMatches()
-		lastEngineRun.Store(time.Now().Unix())
+	for ; ; <-ticker.C {
+		if !protect("placar ao vivo", processMatches) {
+			lastEngineRun.Store(time.Now().Unix())
+		}
 	}
+}
+
+// Buscas de jogo em andamento. Com a ESPN ou o banco lentos, a busca de um jogo pode
+// passar de um minuto, e a volta seguinte começaria outra do mesmo jogo: duas transações
+// regravando a mesma escalação ao mesmo tempo
+var fetching sync.Map // IDEvent → struct{}
+
+// fetchMatch busca e grava um jogo. Variável para os testes
+var fetchMatch = fetchAndSave
+
+// startFetch busca o jogo em segundo plano, protegido, se ele já não estiver sendo buscado
+func startFetch(matchID, league string) bool {
+	if _, busy := fetching.LoadOrStore(matchID, struct{}{}); busy {
+		return false
+	}
+	fetch := fetchMatch
+	go func() {
+		defer fetching.Delete(matchID)
+		protect("busca do jogo "+matchID+" na ESPN", func() { fetch(matchID, league) })
+	}()
+	return true
 }
 
 // 🔥 Esta função resolve o Problema "Tostines" (O Ovo ou a Galinha)
@@ -81,14 +102,21 @@ func processMatches() {
 		if timeToMatch <= 2100 && match.Status == "pre" {
 			log.Printf("[WORKER_BUSCA_ESCALACAO] -> [PRÉ-JOGO] Acionando gatilho da ESPN para o jogo %s!", match.IDEvent)
 			lastFetched[match.IDEvent] = time.Now()
-			go fetchAndSave(match.IDEvent, match.League)
+			startFetch(match.IDEvent, match.League)
 		} else if match.Status == "in" {
 			log.Printf("[WORKER_BUSCA_ESCALACAO] -> [AO VIVO] Acionando gatilho da ESPN para o jogo %s!", match.IDEvent)
 			lastFetched[match.IDEvent] = time.Now()
-			go fetchAndSave(match.IDEvent, match.League)
+			startFetch(match.IDEvent, match.League)
 		}
 	}
 	log.Println("--------------------------------------------------")
+
+	// Jogos de dias atrás não voltam: sem isso, o mapa crescia para sempre
+	for id, last := range lastFetched {
+		if time.Since(last) > 24*time.Hour {
+			delete(lastFetched, id)
+		}
+	}
 }
 
 func fetchAndSave(matchID string, league string) {

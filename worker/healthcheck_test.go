@@ -20,16 +20,18 @@ func TestHealthProblem(t *testing.T) {
 		now          time.Time
 		engine, data int64
 		dbErr        error
+		panico       string
 		falha        bool
 	}{
-		{"tudo rodando", now, recente, recente, nil, false},
-		{"banco fora", now, recente, recente, errors.New("timeout"), true},
-		{"placar ao vivo parado", now, velho, recente, nil, true},
-		{"football-data parada", now, recente, velho, nil, true},
-		{"acabou de subir (laços sem volta ainda)", start.Add(2 * time.Minute), 0, 0, nil, false},
+		{"tudo rodando", now, recente, recente, nil, "", false},
+		{"banco fora", now, recente, recente, errors.New("timeout"), "", true},
+		{"placar ao vivo parado", now, velho, recente, nil, "", true},
+		{"football-data parada", now, recente, velho, nil, "", true},
+		{"acabou de subir (laços sem volta ainda)", start.Add(2 * time.Minute), 0, 0, nil, "", false},
+		{"pânico num laço (recomeçado)", now, recente, recente, nil, "pânico em backup: x", true},
 	}
 	for _, c := range casos {
-		if got := healthProblem(c.now, start, c.engine, c.data, c.dbErr); (got != "") != c.falha {
+		if got := healthProblem(c.now, start, c.engine, c.data, c.dbErr, c.panico); (got != "") != c.falha {
 			t.Errorf("%s: esperado falha=%v, veio %q", c.nome, c.falha, got)
 		}
 	}

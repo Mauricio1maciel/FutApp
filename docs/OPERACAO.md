@@ -20,6 +20,43 @@ Além das do banco (`DB_*`), do `API_TOKEN` da football-data e do `JWT_SECRET`:
 | `PG_DUMP_PATH` | Caminho do `pg_dump`, se não estiver no PATH. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Push no navegador (versão web). As **mesmas três** no worker e no Render: o worker manda os avisos, a API registra os navegadores e faz o teste do admin. Gere uma vez com `go run . -gerar-vapid`; trocar as chaves invalida a inscrição de todos os navegadores. Sem elas, só o push do app funciona. Ao subir, o worker confere se a chave dele é a mesma que a API entrega (log `Chave do push no navegador confere com a API ✓`); se não for, avisa no log e por push ao admin, porque com chaves diferentes o serviço de push recusa todos os avisos do worker (403). |
 
+## Quando algo quebra dentro do worker
+
+- **Pânico (panic) num laço:** antes derrubava o worker inteiro (placar ao vivo, avisos e
+  backup juntos). Agora o erro vai para o log com a pilha (`[WORKER_ERRO] pânico em ...`),
+  o laço recomeça 1 minuto depois, o admin recebe um push (no máximo um por hora) e o
+  sinal de vida manda falha com o motivo. Pânico na busca de um jogo afeta só aquele jogo,
+  naquela volta.
+- **Banco fora do ar quando o worker sobe** (ex: a energia voltou e a internet ainda não):
+  o worker espera e tenta de novo (5 s, 10 s, 20 s... até 1 minuto entre as tentativas),
+  em vez de encerrar. A API no Render faz o mesmo. Os comandos `-backup` e `-criar-admin`
+  continuam falhando na hora.
+- **Busca de jogo lenta:** a mesma partida não é buscada duas vezes ao mesmo tempo; a volta
+  seguinte espera a anterior terminar.
+
+Isso protege o que acontece dentro do programa. Se o processo morrer (ex: falta de
+memória), quem o reinicia é o sistema. Rodar como serviço do systemd resolve, e ele
+também sobe sozinho quando o Orange Pi liga. Exemplo de `/etc/systemd/system/futapp-worker.service`
+(ajuste usuário e pasta):
+```ini
+[Unit]
+Description=FutStatis worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=orangepi
+WorkingDirectory=/home/orangepi/App-Futebol_BackEnd
+ExecStart=/home/orangepi/App-Futebol_BackEnd/futapp -worker
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+Depois: `go build -o futapp .`, `sudo systemctl enable --now futapp-worker` e, para ver
+o log, `journalctl -u futapp-worker -f`.
+
 ## Limite de pedidos (API no Render)
 
 A API limita os pedidos por endereço (detalhes no `docs/API.md`). O endereço do cliente

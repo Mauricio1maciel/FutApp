@@ -41,7 +41,7 @@ func loopHealthcheck() {
 		dbErr := database.DB.PingContext(ctx)
 		cancel()
 
-		problem := healthProblem(time.Now(), start, lastEngineRun.Load(), lastDataRun.Load(), dbErr)
+		problem := healthProblem(time.Now(), start, lastEngineRun.Load(), lastDataRun.Load(), dbErr, takeLastPanic())
 		if err := sendHealthcheck(client, url, problem); err != nil {
 			utils.CustomLog("JOBS", "Monitor externo não respondeu: %v", err)
 		}
@@ -50,10 +50,14 @@ func loopHealthcheck() {
 
 // healthProblem devolve o motivo da falha ("" = tudo certo). Os laços rodam a cada
 // minuto; 10 minutos sem volta é travamento. Logo depois de subir, os laços ainda não
-// tiveram tempo de dar a primeira volta.
-func healthProblem(now, start time.Time, lastEngine, lastData int64, dbErr error) string {
+// tiveram tempo de dar a primeira volta. lastPanic é o último pânico desde o sinal
+// anterior: o laço foi recomeçado, mas alguém precisa olhar o log.
+func healthProblem(now, start time.Time, lastEngine, lastData int64, dbErr error, lastPanic string) string {
 	if dbErr != nil {
 		return "banco de dados fora do ar: " + dbErr.Error()
+	}
+	if lastPanic != "" {
+		return lastPanic + " (laço recomeçado; detalhes no log)"
 	}
 	if now.Sub(start) < 10*time.Minute {
 		return ""

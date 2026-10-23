@@ -50,7 +50,13 @@ func main() {
 		return
 	}
 
-	database.Connect()
+	// Comando que roda e sai: banco fora encerra na hora. Worker e API esperam o banco
+	// voltar (ex: o Orange Pi subindo antes da internet, depois de uma queda de energia)
+	if *backupAgora || *criarAdmin != "" {
+		database.Connect()
+	} else {
+		database.ConnectWaiting()
+	}
 
 	if *backupAgora {
 		file, err := worker.RunBackup(context.Background())
