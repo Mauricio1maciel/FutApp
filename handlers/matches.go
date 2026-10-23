@@ -61,7 +61,7 @@ func MatchesHandler(w http.ResponseWriter, r *http.Request) {
 		// Mata-mata (rodada 0) traz a fase inteira; liga e fase de grupos, a rodada.
 		// Sem fase gravada (temporadas antigas), filtra sempre pela rodada, para
 		// nunca devolver a temporada inteira.
-		stage, round, err := database.GetCurrentStage(r.Context(), league, season)
+		stage, round, err := services.CurrentStage(r.Context(), league, season)
 		if err != nil {
 			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogos")
 			return

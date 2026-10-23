@@ -19,9 +19,6 @@ func TeamsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if season == "" {
-		season = services.CurrentSeason(r.Context(), league)
-	}
 	if !forceUpdate {
 		teams, err := database.GetTeamsByLeague(r.Context(), league)
 		if err != nil {
@@ -32,6 +29,11 @@ func TeamsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A temporada só serve para gravar os times: calculada aqui, a leitura normal não
+	// paga uma ida ao banco a mais
+	if season == "" {
+		season = services.CurrentSeason(r.Context(), league)
+	}
 	teams, err := services.GetTeams(league, 0)
 	if err != nil {
 		utils.WriteError(w, http.StatusBadGateway, "Erro ao buscar times na football-data")

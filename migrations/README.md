@@ -57,6 +57,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 026_espn_leva_penaltis_e_vencedor | ✅ |
 | 027_aviso_de_gol_anulado | ✅ |
 | 028_penaltis_da_espn_sempre_valem | ✅ |
+| 029_indice_da_busca_de_jogadores | ✅ |
 
 ## Testes de integração
 

@@ -54,3 +54,27 @@ func ResolveSeason(ctx context.Context, league string, season string) string {
 	}
 	return CurrentSeason(ctx, league)
 }
+
+// Fase e rodada atuais de cada liga, guardadas por 1 minuto: o /matches sem rodada (a tela
+// da liga ao abrir) pergunta isso em todo pedido que não está no cache da rota, e a
+// resposta só muda quando uma rodada acaba
+var currentStageCache = cache.New(time.Minute, 5*time.Minute)
+
+type stageAndRound struct {
+	stage string
+	round int
+}
+
+// CurrentStage é o database.GetCurrentStage com o cache de 1 minuto. Erro não fica guardado.
+func CurrentStage(ctx context.Context, league, season string) (string, int, error) {
+	key := league + "|" + season
+	if v, ok := currentStageCache.Get(key); ok {
+		sr := v.(stageAndRound)
+		return sr.stage, sr.round, nil
+	}
+	stage, round, err := database.GetCurrentStage(ctx, league, season)
+	if err == nil {
+		currentStageCache.SetDefault(key, stageAndRound{stage, round})
+	}
+	return stage, round, err
+}

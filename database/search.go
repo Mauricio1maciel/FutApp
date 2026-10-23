@@ -89,6 +89,9 @@ func SearchTeamsGlobal(ctx context.Context, query string) ([]models.Team, error)
 	return teams, nil
 }
 
+// SearchPlayersGlobal busca jogadores por pedaço do nome, sem acento. f_unaccent (e não
+// unaccent) é a função do índice de trigramas de espn_players (migration 029): com ela, a
+// busca não varre os 13 mil jogadores
 func SearchPlayersGlobal(ctx context.Context, query string) ([]models.Player, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -110,7 +113,7 @@ func SearchPlayersGlobal(ctx context.Context, query string) ([]models.Player, er
                 1 AS priority
             FROM espn_players ep
             LEFT JOIN teams t ON ep.espn_team_id = CAST(t.espn_team_id AS BIGINT) 
-            WHERE unaccent(ep.name) ILIKE '%' || unaccent($1) || '%'
+            WHERE f_unaccent(ep.name) ILIKE '%' || f_unaccent($1) || '%'
 
             UNION ALL
 
@@ -129,13 +132,13 @@ func SearchPlayersGlobal(ctx context.Context, query string) ([]models.Player, er
                 2 AS priority
             FROM players p
             LEFT JOIN teams t ON p.team_id = t.api_id
-            WHERE unaccent(p.name) ILIKE '%' || unaccent($1) || '%'
+            WHERE f_unaccent(p.name) ILIKE '%' || f_unaccent($1) || '%'
         ),
         deduplicated_results AS (
             SELECT 
                 *,
                 ROW_NUMBER() OVER (
-                    PARTITION BY unaccent(name), team_id 
+                    PARTITION BY f_unaccent(name), team_id 
                     ORDER BY priority ASC                
                 ) as row_num
             FROM combined_results

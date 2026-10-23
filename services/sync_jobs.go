@@ -5,10 +5,15 @@ import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
+	"sync"
 	"time"
+
+	"github.com/patrickmn/go-cache"
 )
 
 // Rotinas que falam com as APIs externas e gravam no banco.
@@ -118,7 +123,14 @@ func RecalculateStandings(ctx context.Context, league, season string) error {
 		}
 	}
 
-	standings, _, ok := computeStandings(ctx, league, season, matches, matches)
+	// Regras lidas na hora (sem o cache da API): o worker grava a tabela logo depois de
+	// atualizar os campeões das copas. Se alguma consulta falhar, não grava: uma tabela sem
+	// as vagas sobrescreveria a certa até o próximo recálculo
+	rules, err := loadTableRules(ctx, league, season)
+	if err != nil {
+		return fmt.Errorf("regras da tabela: %w", err)
+	}
+	standings, _, ok := buildTable(rules, league, season, matches, matches)
 	if !ok {
 		return nil // copa só de mata-mata (ex: Copa do Brasil): não tem tabela
 	}
@@ -137,27 +149,65 @@ type tableRules struct {
 	espnOnly bool     // liga que vem só da ESPN (ex: Série B)
 }
 
-func loadTableRules(ctx context.Context, league, season string) tableRules {
+// loadTableRules lê as regras da tabela. As cinco consultas são independentes e vão ao
+// banco ao mesmo tempo: do Render (EUA) ao banco (São Paulo), cada ida e volta custa
+// ~185 ms, e em fila eram quase 1 s. Liga sem regra cadastrada (ex: Liga das Nações) não
+// é erro: fica sem vagas.
+func loadTableRules(ctx context.Context, league, season string) (tableRules, error) {
 	var r tableRules
-	r.winners, _ = database.GetWinnersBySeasonAndSeason(ctx, league, season)
-	r.rule, _ = database.GetCompetitionRule(ctx, league, season)
-	r.zones, _ = database.GetZonesByLeague(ctx, league)
-	r.criteria, _ = database.GetTieBreakers(ctx, league, season)
-	espnOnly, _ := database.GetESPNOnlyLeagues(ctx)
+	var espnOnly []string
+	errs := make([]error, 5)
+	var wg sync.WaitGroup
+	wg.Add(5)
+	go func() {
+		defer wg.Done()
+		r.winners, errs[0] = database.GetWinnersBySeasonAndSeason(ctx, league, season)
+	}()
+	go func() {
+		defer wg.Done()
+		if r.rule, errs[1] = database.GetCompetitionRule(ctx, league, season); errors.Is(errs[1], sql.ErrNoRows) {
+			errs[1] = nil
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		r.zones, errs[2] = database.GetZonesByLeague(ctx, league)
+	}()
+	go func() {
+		defer wg.Done()
+		r.criteria, errs[3] = database.GetTieBreakers(ctx, league, season)
+	}()
+	go func() {
+		defer wg.Done()
+		espnOnly, errs[4] = database.GetESPNOnlyLeagues(ctx)
+	}()
+	wg.Wait()
 	r.espnOnly = slices.Contains(espnOnly, league)
-	return r
+	return r, errors.Join(errs...)
 }
 
-// computeStandings monta a classificação da temporada, sem gravar. matches são os jogos
-// que contam (na tabela ao vivo, os em andamento já entram como encerrados); formFrom são
-// os jogos de verdade, de onde sai a forma recente. ok = false quando a competição não
-// tem tabela (copa só de mata-mata). used são os jogos que entraram na tabela.
-func computeStandings(ctx context.Context, league, season string, matches, formFrom []models.Match) (standings []models.Standing, used []models.Match, ok bool) {
-	return buildTable(loadTableRules(ctx, league, season), league, season, matches, formFrom)
+// As regras mudam poucas vezes por temporada (os campeões de copa, uma vez por final). A
+// tabela ao vivo e as chances leem as regras em todo pedido que não está no cache da rota:
+// guardadas por 2 minutos, viram uma ida ao banco de vez em quando.
+var tableRulesCache = cache.New(2*time.Minute, 10*time.Minute)
+
+// cachedTableRules é o loadTableRules das rotas de leitura. Erro não fica guardado.
+func cachedTableRules(ctx context.Context, league, season string) (tableRules, error) {
+	key := league + "|" + season
+	if v, ok := tableRulesCache.Get(key); ok {
+		return v.(tableRules), nil
+	}
+	r, err := loadTableRules(ctx, league, season)
+	if err == nil {
+		tableRulesCache.SetDefault(key, r)
+	}
+	return r, err
 }
 
-// buildTable é o computeStandings com as regras já lidas do banco (cada leitura custa
-// uma ida ao banco: quem monta mais de uma tabela da mesma liga lê uma vez só)
+// buildTable monta a classificação da temporada, sem gravar. matches são os jogos que
+// contam (na tabela ao vivo, os em andamento já entram como encerrados); formFrom são os
+// jogos de verdade, de onde sai a forma recente. ok = false quando a competição não tem
+// tabela (copa só de mata-mata). used são os jogos que entraram na tabela.
 func buildTable(rules tableRules, league, season string, matches, formFrom []models.Match) (standings []models.Standing, used []models.Match, ok bool) {
 	formMatches := formFrom // a forma usa os mesmos jogos que formam a tabela
 	used = matches

@@ -5,6 +5,7 @@ import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
 	"net/http"
+	"sync"
 )
 
 func GlobalSearchHandler(w http.ResponseWriter, r *http.Request) {
@@ -15,22 +16,28 @@ func GlobalSearchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	leagues, err := database.SearchLeagues(r.Context(), query)
-	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar ligas")
-		return
-	}
-
-	teams, err := database.SearchTeamsGlobal(r.Context(), query)
-	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar times")
-		return
-	}
-
-	players, err := database.SearchPlayersGlobal(r.Context(), query)
-	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar jogadores")
-		return
+	// As três buscas são independentes e vão ao banco ao mesmo tempo: em fila, eram três
+	// idas e voltas do Render (EUA) ao banco (São Paulo)
+	var (
+		leagues                     []models.League
+		teams                       []models.Team
+		players                     []models.Player
+		errLeagues, errTeams, errPl error
+		wg                          sync.WaitGroup
+	)
+	wg.Add(3)
+	go func() { defer wg.Done(); leagues, errLeagues = database.SearchLeagues(r.Context(), query) }()
+	go func() { defer wg.Done(); teams, errTeams = database.SearchTeamsGlobal(r.Context(), query) }()
+	go func() { defer wg.Done(); players, errPl = database.SearchPlayersGlobal(r.Context(), query) }()
+	wg.Wait()
+	for _, e := range []struct {
+		err  error
+		what string
+	}{{errLeagues, "ligas"}, {errTeams, "times"}, {errPl, "jogadores"}} {
+		if e.err != nil {
+			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar "+e.what)
+			return
+		}
 	}
 
 	result := models.SearchResult{

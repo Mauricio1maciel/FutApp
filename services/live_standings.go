@@ -21,7 +21,10 @@ func LiveStandings(ctx context.Context, league, season string) ([]models.Standin
 	}
 	asIfFinished, liveIDs := liveAsFinished(matches)
 
-	rules := loadTableRules(ctx, league, season)
+	rules, err := cachedTableRules(ctx, league, season)
+	if err != nil {
+		return nil, err
+	}
 	live, used, ok := buildTable(rules, league, season, asIfFinished, matches)
 	if !ok {
 		return []models.Standing{}, nil

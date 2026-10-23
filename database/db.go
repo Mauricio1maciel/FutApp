@@ -91,10 +91,15 @@ func Connect() {
 		log.Fatalf("Erro ao pingar o banco: %v", err)
 	}
 
-	// Configuração do Pool de Conexões (Crucial para performance no Render/Supabase)
-	db.SetMaxOpenConns(25)                 // Define o limite de conexões simultâneas
-	db.SetMaxIdleConns(25)                 // Define quantas conexões ficam em espera
-	db.SetConnMaxLifetime(5 * time.Minute) // Renova conexões para evitar erros de timeout
+	// Pool de conexões. Abrir uma conexão do Render (EUA) até o pooler do Supabase (São
+	// Paulo) custa ~4 idas e voltas (TCP, TLS e autenticação), uns 0,8 s. Com 5 minutos de
+	// vida, cada conexão era refeita 12 vezes por hora, e o pedido que pegava a conexão
+	// nova pagava a espera. Conexão parada há 15 minutos é fechada; a que o pooler derrubar
+	// é refeita sozinha pelo database/sql (o lib/pq a marca como ruim e o pedido tenta de novo).
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(30 * time.Minute)
+	db.SetConnMaxIdleTime(15 * time.Minute)
 
 	DB = db
 	fmt.Printf("Banco conectado com sucesso e Pool configurado! (sslmode=%s)\n", sslmode)

@@ -27,7 +27,9 @@
   (jogos, detalhes do jogo), 1 min (classificação, calendário), 2 min (chances) ou 10 min (times,
   elencos, temporadas, artilharia) de atraso. O header `X-Cache` diz `HIT` (veio da
   memória), `MISS` (veio do banco) ou `BYPASS` (admin, sempre fresco). Puxar para
-  atualizar mais rápido que isso não traz dado novo.
+  atualizar mais rápido que isso não traz dado novo. Por dentro, a fase atual de cada
+  liga fica 1 min guardada, e as regras da tabela (vagas, zonas, desempate) 2 min: uma
+  mudança nelas pode levar esse tempo a mais para aparecer na tabela ao vivo e nas chances.
 
 - **"Não mudou" (304), para gastar menos internet:** toda leitura (`GET`) que dá 200 vem
   com o header `ETag` (ex: `W/"dcd1cd1a2138b85d"`), uma etiqueta do conteúdo, e

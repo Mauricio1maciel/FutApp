@@ -58,7 +58,10 @@ func LeagueChancesFor(ctx context.Context, league, season string) (*LeagueChance
 	if err != nil {
 		return nil, err
 	}
-	rules := loadTableRules(ctx, league, season)
+	rules, err := cachedTableRules(ctx, league, season)
+	if err != nil {
+		return nil, err
+	}
 	current, table, ok := buildTable(rules, league, season, matches, matches)
 	if !ok || len(current) == 0 {
 		return nil, ErrNoLeagueTable
