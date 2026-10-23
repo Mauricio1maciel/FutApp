@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/lib/pq"
 	"log"
+	"strconv"
 )
 
 // MatchFilter escolhe quais jogos de uma liga e temporada devolver.
@@ -151,6 +152,39 @@ const fdBehindESPN = `(matches.status IN ('IN_PLAY', 'PAUSED') AND EXCLUDED.stat
 // vencedor)
 const fdKeepsOurs = `(` + fdRegresses + ` OR ` + fdBehindESPN + `)`
 
+// matchUpsertConflict é o que acontece quando o jogo já existe, igual para um jogo
+// (SaveMatch) e para a liga inteira (SaveMatches). O WHERE pula a gravação quando nada
+// mudaria: a football-data manda a temporada inteira a cada volta, e regravar os mesmos
+// valores eram ~270 mil atualizações por dia em matches (8 milhões em um mês, para 11 mil
+// jogos)
+const matchUpsertConflict = `
+    ON CONFLICT (id_event, league)
+    DO UPDATE SET
+         home_score = CASE WHEN ` + fdKeepsOurs + ` THEN matches.home_score ELSE EXCLUDED.home_score END,
+         away_score = CASE WHEN ` + fdKeepsOurs + ` THEN matches.away_score ELSE EXCLUDED.away_score END,
+         home_penalty = CASE WHEN ` + fdKeepsOurs + ` THEN matches.home_penalty ELSE EXCLUDED.home_penalty END,
+         away_penalty = CASE WHEN ` + fdKeepsOurs + ` THEN matches.away_penalty ELSE EXCLUDED.away_penalty END,
+         match_date = EXCLUDED.match_date,
+         season = EXCLUDED.season,
+         status = CASE WHEN ` + fdKeepsOurs + ` THEN matches.status ELSE EXCLUDED.status END,
+         round = EXCLUDED.round,
+         api_home_team_id = EXCLUDED.api_home_team_id,
+         api_away_team_id = EXCLUDED.api_away_team_id,
+         stage = EXCLUDED.stage,
+         group_name = EXCLUDED.group_name,
+         winner = CASE WHEN ` + fdKeepsOurs + ` THEN matches.winner ELSE EXCLUDED.winner END
+    WHERE (matches.match_date, matches.season, matches.round, matches.api_home_team_id,
+           matches.api_away_team_id, matches.stage, matches.group_name)
+          IS DISTINCT FROM
+          (EXCLUDED.match_date, EXCLUDED.season, EXCLUDED.round, EXCLUDED.api_home_team_id,
+           EXCLUDED.api_away_team_id, EXCLUDED.stage, EXCLUDED.group_name)
+       OR (NOT COALESCE(` + fdKeepsOurs + `, false)
+           AND (matches.home_score, matches.away_score, matches.home_penalty, matches.away_penalty,
+                matches.status, matches.winner)
+               IS DISTINCT FROM
+               (EXCLUDED.home_score, EXCLUDED.away_score, EXCLUDED.home_penalty, EXCLUDED.away_penalty,
+                EXCLUDED.status, EXCLUDED.winner))`
+
 func SaveMatch(ctx context.Context,
 	idEvent int64,
 	league string,
@@ -168,52 +202,108 @@ func SaveMatch(ctx context.Context,
 	groupName string,
 	winner string,
 ) error {
+	_, err := saveMatch(ctx, MatchRow{IDEvent: idEvent, League: league, Season: season, Round: round,
+		HomeTeamID: apiHomeTeamID, AwayTeamID: apiAwayTeamID, HomeScore: homeScore, AwayScore: awayScore,
+		HomePenalty: homePenalty, AwayPenalty: awayPenalty, Date: date, Status: status, Stage: stage,
+		Group: groupName, Winner: winner})
+	return err
+}
 
-	query := `
+// saveMatch grava um jogo e diz se ele mudou (1) ou ficou igual (0)
+func saveMatch(ctx context.Context, r MatchRow) (int64, error) {
+	res, err := DB.ExecContext(ctx, `
     INSERT INTO matches
     (id_event, league, season, round, api_home_team_id, api_away_team_id, home_score, away_score, home_penalty, away_penalty, match_date, status, stage, group_name, winner)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11, '')::TIMESTAMP,$12,$13,$14,$15)
-    ON CONFLICT (id_event, league) 
-    DO UPDATE SET
-         home_score = CASE WHEN ` + fdKeepsOurs + ` THEN matches.home_score ELSE EXCLUDED.home_score END,
-         away_score = CASE WHEN ` + fdKeepsOurs + ` THEN matches.away_score ELSE EXCLUDED.away_score END,
-         home_penalty = CASE WHEN ` + fdKeepsOurs + ` THEN matches.home_penalty ELSE EXCLUDED.home_penalty END,
-         away_penalty = CASE WHEN ` + fdKeepsOurs + ` THEN matches.away_penalty ELSE EXCLUDED.away_penalty END,
-         match_date = EXCLUDED.match_date,
-         season = EXCLUDED.season,
-         status = CASE WHEN ` + fdKeepsOurs + ` THEN matches.status ELSE EXCLUDED.status END,
-         round = EXCLUDED.round,
-         api_home_team_id = EXCLUDED.api_home_team_id,
-         api_away_team_id = EXCLUDED.api_away_team_id,
-         stage = EXCLUDED.stage,
-         group_name = EXCLUDED.group_name,
-		 winner = CASE WHEN ` + fdKeepsOurs + ` THEN matches.winner ELSE EXCLUDED.winner END
-    `
-
-	_, err := DB.ExecContext(ctx,
-		query,
-		idEvent,
-		league,
-		season,
-		round,
-		apiHomeTeamID,
-		apiAwayTeamID,
-		homeScore,
-		awayScore,
-		homePenalty,
-		awayPenalty,
-		date,
-		status,
-		stage,
-		groupName,
-		winner,
-	)
-
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11, '')::TIMESTAMP,$12,$13,$14,$15)`+matchUpsertConflict,
+		r.IDEvent, r.League, r.Season, r.Round, r.HomeTeamID, r.AwayTeamID, r.HomeScore, r.AwayScore,
+		r.HomePenalty, r.AwayPenalty, r.Date, r.Status, r.Stage, r.Group, r.Winner)
 	if err != nil {
 		log.Printf("Erro ao salvar jogo: %v", err)
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// MatchRow é um jogo da football-data para o SaveMatches
+type MatchRow struct {
+	IDEvent                  int64
+	League, Season           string
+	Round                    int
+	HomeTeamID, AwayTeamID   int64
+	HomeScore, AwayScore     int
+	HomePenalty, AwayPenalty *int
+	Date                     string // ISO; vazio = sem data
+	Status, Stage, Group     string
+	Winner                   string
+}
+
+// SaveMatches grava a lista inteira num comando só: do Orange Pi ao banco, cada comando é
+// uma ida e volta, e eram ~380 por liga a cada volta da football-data. Devolve quantos
+// jogos mudaram (os iguais não são regravados). Se o comando falhar, grava um por um, para
+// um jogo com problema não travar os outros.
+func SaveMatches(ctx context.Context, rows []MatchRow) (changed int64, err error) {
+	// O mesmo jogo duas vezes no mesmo comando é erro no Postgres: fica a última versão
+	index := make(map[string]int, len(rows))
+	unique := make([]MatchRow, 0, len(rows))
+	for _, r := range rows {
+		key := r.League + "|" + strconv.FormatInt(r.IDEvent, 10)
+		if i, ok := index[key]; ok {
+			unique[i] = r
+			continue
+		}
+		index[key] = len(unique)
+		unique = append(unique, r)
+	}
+	if len(unique) == 0 {
+		return 0, nil
 	}
 
-	return err
+	n := len(unique)
+	ids, homes, aways := make([]int64, n), make([]int64, n), make([]int64, n)
+	rounds, homeScores, awayScores := make([]int64, n), make([]int64, n), make([]int64, n)
+	homePens, awayPens := make([]sql.NullInt64, n), make([]sql.NullInt64, n)
+	dates := make([]sql.NullString, n)
+	leagues, seasons, statuses := make([]string, n), make([]string, n), make([]string, n)
+	stages, groups, winners := make([]string, n), make([]string, n), make([]string, n)
+	for i, r := range unique {
+		ids[i], leagues[i], seasons[i], rounds[i] = r.IDEvent, r.League, r.Season, int64(r.Round)
+		homes[i], aways[i] = r.HomeTeamID, r.AwayTeamID
+		homeScores[i], awayScores[i] = int64(r.HomeScore), int64(r.AwayScore)
+		if r.HomePenalty != nil {
+			homePens[i] = sql.NullInt64{Int64: int64(*r.HomePenalty), Valid: true}
+		}
+		if r.AwayPenalty != nil {
+			awayPens[i] = sql.NullInt64{Int64: int64(*r.AwayPenalty), Valid: true}
+		}
+		dates[i] = sql.NullString{String: r.Date, Valid: r.Date != ""}
+		statuses[i], stages[i], groups[i], winners[i] = r.Status, r.Stage, r.Group, r.Winner
+	}
+
+	batchCtx, cancel := withTxTimeout(ctx)
+	defer cancel()
+	res, err := DB.ExecContext(batchCtx, `
+    INSERT INTO matches
+    (id_event, league, season, round, api_home_team_id, api_away_team_id, home_score, away_score, home_penalty, away_penalty, match_date, status, stage, group_name, winner)
+    SELECT * FROM unnest($1::bigint[], $2::varchar[], $3::varchar[], $4::int[], $5::bigint[], $6::bigint[],
+                         $7::int[], $8::int[], $9::int[], $10::int[], $11::timestamp[], $12::varchar[],
+                         $13::varchar[], $14::varchar[], $15::varchar[])`+matchUpsertConflict,
+		pq.Array(ids), pq.Array(leagues), pq.Array(seasons), pq.Array(rounds), pq.Array(homes), pq.Array(aways),
+		pq.Array(homeScores), pq.Array(awayScores), pq.Array(homePens), pq.Array(awayPens), pq.Array(dates),
+		pq.Array(statuses), pq.Array(stages), pq.Array(groups), pq.Array(winners))
+	if err == nil {
+		return res.RowsAffected()
+	}
+
+	utils.CustomLog("DB_ERRO", "Gravação dos %d jogos num comando só falhou (%v): gravando um por um", n, err)
+	var firstErr error
+	for _, r := range unique {
+		c, e := saveMatch(ctx, r)
+		changed += c
+		if e != nil && firstErr == nil {
+			firstErr = e
+		}
+	}
+	return changed, firstErr
 }
 
 // GetCurrentStage devolve a fase e a rodada atuais de uma liga: as do próximo jogo

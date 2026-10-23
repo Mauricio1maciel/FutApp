@@ -39,14 +39,8 @@ func SyncFootballDataSeason(ctx context.Context, league string, seasonYear int) 
 	// Uma consulta só, em vez de uma por jogo
 	format := database.GetLeagueSeasonFormat(ctx, league)
 
-	saved := 0
+	rows := make([]database.MatchRow, 0, len(apiMatches))
 	for _, m := range apiMatches {
-		if err := ctx.Err(); err != nil {
-			// Cancelado (ex: o pedido do admin caiu): parar já, em vez de tentar cada jogo
-			// restante e encher o log de "context canceled"
-			utils.CustomLog("JOBS", "[%s] Football-Data interrompida: %d/%d jogos gravados", league, saved, len(apiMatches))
-			return err
-		}
 		homeScore, awayScore := 0, 0
 		var homePen, awayPen *int
 		if m.Score.FullTime.Home != nil {
@@ -68,23 +62,27 @@ func SyncFootballDataSeason(ctx context.Context, league string, seasonYear int) 
 			awayScore = awayScore - aP
 		}
 
-		err := database.SaveMatch(ctx,
-			int64(m.ID), league,
-			SeasonFromDate(m.UTCDate, format),
-			m.Matchday,
-			int64(m.HomeTeam.ID), int64(m.AwayTeam.ID),
-			homeScore, awayScore,
-			homePen, awayPen,
-			m.UTCDate, m.Status,
-			m.Stage, m.Group,
-			m.Score.Winner,
-		)
-		if err == nil {
-			saved++
-		}
+		rows = append(rows, database.MatchRow{
+			IDEvent: int64(m.ID), League: league, Season: SeasonFromDate(m.UTCDate, format),
+			Round: m.Matchday, HomeTeamID: int64(m.HomeTeam.ID), AwayTeamID: int64(m.AwayTeam.ID),
+			HomeScore: homeScore, AwayScore: awayScore, HomePenalty: homePen, AwayPenalty: awayPen,
+			Date: m.UTCDate, Status: m.Status, Stage: m.Stage, Group: m.Group, Winner: m.Score.Winner,
+		})
 	}
 
-	utils.CustomLog("JOBS", "[%s] Football-Data: %d/%d jogos gravados", league, saved, len(apiMatches))
+	// A temporada inteira num comando só; os jogos iguais não são regravados
+	changed, err := database.SaveMatches(ctx, rows)
+	if ctx.Err() != nil {
+		// Cancelado (ex: o pedido do admin caiu)
+		utils.CustomLog("JOBS", "[%s] Football-Data interrompida: %v", league, ctx.Err())
+		return ctx.Err()
+	}
+	if err != nil {
+		// Algum jogo não foi gravado; os outros foram (gravação um por um). A classificação
+		// segue sendo recalculada com o que está no banco
+		utils.CustomLog("JOBS", "[%s] Football-Data: erro ao gravar jogos: %v", league, err)
+	}
+	utils.CustomLog("JOBS", "[%s] Football-Data: %d jogos, %d mudaram", league, len(rows), changed)
 	return nil
 }
 

@@ -4,6 +4,8 @@ import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
 	"context"
+
+	"github.com/lib/pq"
 )
 
 // ReplaceStandings troca a classificação inteira numa única transação,
@@ -27,33 +29,31 @@ func ReplaceStandings(ctx context.Context, league string, season string, standin
 		return err
 	}
 
-	for _, s := range standings {
-		_, err := tx.ExecContext(ctx, `
-            INSERT INTO standings
-            (league, position, team_id, played, wins, draws, losses, goals_for, goals_against, goal_diff, points, zone, season, group_name, form)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-        `,
-			league,
-			s.Position,
-			s.TeamID,
-			s.Played,
-			s.Wins,
-			s.Draws,
-			s.Losses,
-			s.GoalsFor,
-			s.GoalsAgainst,
-			s.GoalDiff,
-			s.Points,
-			s.Zone,
-			season,
-			s.GroupName,
-			s.Form,
-		)
-
-		if err != nil {
-			utils.CustomLog("DATABASE_ERRO", "Falha ao salvar time ID %d na tabela standings: %v", s.TeamID, err)
-			return err
-		}
+	// A tabela inteira num comando só (eram uma linha por comando, ~20 idas e voltas por
+	// recálculo de cada liga)
+	n := len(standings)
+	positions, played, wins, draws, losses := make([]int64, n), make([]int64, n), make([]int64, n), make([]int64, n), make([]int64, n)
+	goalsFor, goalsAgainst, goalDiff, points := make([]int64, n), make([]int64, n), make([]int64, n), make([]int64, n)
+	teamIDs := make([]int64, n)
+	zones, groups, forms := make([]string, n), make([]string, n), make([]string, n)
+	for i, st := range standings {
+		positions[i], teamIDs[i] = int64(st.Position), st.TeamID
+		played[i], wins[i], draws[i], losses[i] = int64(st.Played), int64(st.Wins), int64(st.Draws), int64(st.Losses)
+		goalsFor[i], goalsAgainst[i], goalDiff[i], points[i] = int64(st.GoalsFor), int64(st.GoalsAgainst), int64(st.GoalDiff), int64(st.Points)
+		zones[i], groups[i], forms[i] = st.Zone, st.GroupName, st.Form
+	}
+	if _, err := tx.ExecContext(ctx, `
+        INSERT INTO standings
+        (league, position, team_id, played, wins, draws, losses, goals_for, goals_against, goal_diff, points, zone, season, group_name, form)
+        SELECT $1, pos, team, pl, w, d, l, gf, ga, gd, pts, z, $2, g, f
+        FROM unnest($3::int[], $4::bigint[], $5::int[], $6::int[], $7::int[], $8::int[], $9::int[], $10::int[],
+                    $11::int[], $12::int[], $13::varchar[], $14::varchar[], $15::varchar[])
+             AS s(pos, team, pl, w, d, l, gf, ga, gd, pts, z, g, f)`,
+		league, season, pq.Array(positions), pq.Array(teamIDs), pq.Array(played), pq.Array(wins),
+		pq.Array(draws), pq.Array(losses), pq.Array(goalsFor), pq.Array(goalsAgainst), pq.Array(goalDiff),
+		pq.Array(points), pq.Array(zones), pq.Array(groups), pq.Array(forms)); err != nil {
+		utils.CustomLog("DATABASE_ERRO", "Falha ao salvar a classificação de %s: %v", league, err)
+		return err
 	}
 
 	return tx.Commit()

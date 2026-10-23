@@ -123,28 +123,51 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
 		}
 	}
 
-	for _, l := range lineups {
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO espn_match_lineups (espn_match_id, espn_team_id, espn_player_id, player_name, jersey, position, is_starter, formation)
-             VALUES ($1::BIGINT, $2::BIGINT, $3::BIGINT, $4, $5, $6, $7, $8)`,
-			l.MatchID, l.ESPNTeamID, l.ESPNPlayerID, l.PlayerName, l.Jersey, l.Position, l.IsStarter, l.Formation,
-		)
-		if err != nil {
+	// Escalação e eventos num comando cada (eram uma linha por comando: ~50 idas e voltas
+	// por jogo ao vivo, a cada minuto). WITH ORDINALITY mantém a ordem da ESPN nos ids,
+	// que o aviso de gol usa para achar o último gol
+	if len(lineups) > 0 {
+		n := len(lineups)
+		matchIDs, names, jerseys := make([]string, n), make([]string, n), make([]string, n)
+		positions, formations := make([]string, n), make([]string, n)
+		teamIDs, playerIDs := make([]int64, n), make([]int64, n)
+		starters := make([]bool, n)
+		for i, l := range lineups {
+			matchIDs[i], teamIDs[i], playerIDs[i] = l.MatchID, l.ESPNTeamID, l.ESPNPlayerID
+			names[i], jerseys[i], positions[i] = l.PlayerName, l.Jersey, l.Position
+			starters[i], formations[i] = l.IsStarter, l.Formation
+		}
+		if _, err = tx.ExecContext(ctx, `
+            INSERT INTO espn_match_lineups (espn_match_id, espn_team_id, espn_player_id, player_name, jersey, position, is_starter, formation)
+            SELECT m, t, p, n, j, pos, s, f
+            FROM unnest($1::bigint[], $2::bigint[], $3::bigint[], $4::varchar[], $5::varchar[], $6::varchar[], $7::boolean[], $8::varchar[])
+                 WITH ORDINALITY AS l(m, t, p, n, j, pos, s, f, ord)
+            ORDER BY ord`,
+			pq.Array(matchIDs), pq.Array(teamIDs), pq.Array(playerIDs), pq.Array(names),
+			pq.Array(jerseys), pq.Array(positions), pq.Array(starters), pq.Array(formations)); err != nil {
 			utils.CustomLog("DATABASE_ERRO", "Falha ao inserir escalação: %v", err)
-			tx.Rollback()
 			return err
 		}
 	}
 
-	for _, e := range events {
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO espn_match_events (espn_match_id, minute, event_type, espn_team_id, player_name, details)
-             VALUES ($1::BIGINT, $2, $3, $4::BIGINT, $5, $6)`,
-			e.MatchID, e.Minute, e.EventType, e.ESPNTeamID, e.PlayerName, e.Details,
-		)
-		if err != nil {
+	if len(events) > 0 {
+		n := len(events)
+		matchIDs, minutes, types := make([]string, n), make([]string, n), make([]string, n)
+		players, details := make([]string, n), make([]string, n)
+		teamIDs := make([]int64, n)
+		for i, e := range events {
+			matchIDs[i], minutes[i], types[i] = e.MatchID, e.Minute, e.EventType
+			teamIDs[i], players[i], details[i] = e.ESPNTeamID, e.PlayerName, e.Details
+		}
+		if _, err = tx.ExecContext(ctx, `
+            INSERT INTO espn_match_events (espn_match_id, minute, event_type, espn_team_id, player_name, details)
+            SELECT m, mi, ty, t, p, d
+            FROM unnest($1::bigint[], $2::varchar[], $3::varchar[], $4::bigint[], $5::varchar[], $6::text[])
+                 WITH ORDINALITY AS e(m, mi, ty, t, p, d, ord)
+            ORDER BY ord`,
+			pq.Array(matchIDs), pq.Array(minutes), pq.Array(types), pq.Array(teamIDs),
+			pq.Array(players), pq.Array(details)); err != nil {
 			utils.CustomLog("DATABASE_ERRO", "Falha ao inserir evento: %v", err)
-			tx.Rollback()
 			return err
 		}
 	}
