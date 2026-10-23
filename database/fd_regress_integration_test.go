@@ -150,3 +150,28 @@ func TestSaveMatchAoVivoFicaComOPlacarDaESPN(t *testing.T) {
 		t.Errorf("o resultado final da football-data deveria valer: %+v", e)
 	}
 }
+
+// Durante a disputa de pênaltis a ESPN manda o parcial (0 x 0 no começo): o placar final
+// dela precisa substituir o parcial (Flamengo x Estudiantes 2026 ficou preso em 0 x 0)
+func TestESPNPenaltisParciaisSaoSubstituidos(t *testing.T) {
+	openTestDB(t)
+	ctx := context.Background()
+	inicio := time.Now().UTC().Add(-3 * time.Hour)
+	newTestMatch(t, 7771301, -3*time.Hour, "SCHEDULED", 0, 0)
+	jogo := models.ESPNMatchDB{
+		MatchID: "9991301", League: tstLeague, Season: "2026", Status: "in",
+		MatchDate:      inicio.Format("2006-01-02T15:04Z"),
+		ESPNHomeTeamID: tstESPNHome, ESPNAwayTeamID: tstESPNAway, HomeScore: "0", AwayScore: "0",
+		HomePenalty: pint(0), AwayPenalty: pint(0),
+	}
+	if err := SaveFullMatchHistory(ctx, jogo, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	jogo.Status, jogo.HomePenalty, jogo.AwayPenalty = "post", pint(2), pint(3)
+	if err := SaveFullMatchHistory(ctx, jogo, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if e := lerJogo(t, 7771301); e.status != "FINISHED" || e.penCasa.Int64 != 2 || e.penFora.Int64 != 3 || e.vencedor != "AWAY_TEAM" {
+		t.Errorf("esperado encerrado, pênaltis 2 x 3 e vitória do visitante, veio %+v", e)
+	}
+}
