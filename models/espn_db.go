@@ -35,6 +35,19 @@ type ESPNMatchDB struct {
 	// Estatísticas cruas da ESPN, gravadas em espn_matches.statistics. A API devolve a
 	// lista escolhida (FullMatchHistory.Statistics), não isto
 	Statistics *MatchStatistics `json:"-"`
+
+	// Narração lance a lance em português, gravada em espn_matches.commentary (nil = não
+	// buscada: fica a que já está gravada)
+	Commentary []CommentaryEntry `json:"-"`
+}
+
+// CommentaryEntry é um lance da narração da ESPN
+type CommentaryEntry struct {
+	Seq    int    `json:"seq"`            // ordem na narração (estável entre leituras)
+	Minute string `json:"minute"`         // ex: "40'", "90'+13'"; vazio no fim do jogo
+	Text   string `json:"text"`           // ex: "Rodrigo Garro (Corinthians) recebe cartão amarelo."
+	Type   string `json:"type,omitempty"` // tipo do lance na ESPN, ex: goal, yellow-card, foul, substitution
+	Team   string `json:"team,omitempty"` // time do lance, quando há
 }
 
 type ESPNLineupDB struct {

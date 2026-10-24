@@ -6,6 +6,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"slices"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -77,8 +80,8 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
 	// 🔥 2. SALVAR NA ESPN_MATCHES (com pênaltis: o trigger leva para matches nas ligas
 	// que vêm só da ESPN)
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO espn_matches (espn_match_id, league, season, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name, home_penalty, away_penalty, statistics) 
-         VALUES ($1::BIGINT, $2, $3, NULLIF($4, '')::TIMESTAMP, $5, $6::BIGINT, $7, $8::BIGINT, $9, $10, $11, $12, $13, $14, $15, $16::JSONB)
+		`INSERT INTO espn_matches (espn_match_id, league, season, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name, home_penalty, away_penalty, statistics, commentary) 
+         VALUES ($1::BIGINT, $2, $3, NULLIF($4, '')::TIMESTAMP, $5, $6::BIGINT, $7, $8::BIGINT, $9, $10, $11, $12, $13, $14, $15, $16::JSONB, $17::JSONB)
          ON CONFLICT (espn_match_id) DO UPDATE 
          SET home_score = EXCLUDED.home_score,
              away_score = EXCLUDED.away_score,
@@ -94,13 +97,14 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
              group_name = COALESCE(NULLIF(EXCLUDED.group_name, ''), espn_matches.group_name),
              home_penalty = COALESCE(EXCLUDED.home_penalty, espn_matches.home_penalty),
              away_penalty = COALESCE(EXCLUDED.away_penalty, espn_matches.away_penalty),
-             statistics = COALESCE(EXCLUDED.statistics, espn_matches.statistics)`,
+             statistics = COALESCE(EXCLUDED.statistics, espn_matches.statistics),
+             commentary = COALESCE(EXCLUDED.commentary, espn_matches.commentary)`,
 		match.MatchID, match.League, match.Season, match.MatchDate,
 		match.HomeLogo, match.ESPNHomeTeamID,
 		match.AwayLogo, match.ESPNAwayTeamID,
 		match.HomeScore, match.AwayScore, match.Status,
 		match.Stage, match.GroupName,
-		match.HomePenalty, match.AwayPenalty, statsJSON(match.Statistics),
+		match.HomePenalty, match.AwayPenalty, statsJSON(match.Statistics), commentaryJSON(match.Commentary),
 	)
 	if err != nil {
 		utils.CustomLog("DATABASE_ERRO", "Falha ao inserir partida: %v", err)
@@ -376,4 +380,55 @@ func statsJSON(s *models.MatchStatistics) interface{} {
 		return nil
 	}
 	return string(b)
+}
+
+func commentaryJSON(c []models.CommentaryEntry) interface{} {
+	if len(c) == 0 {
+		return nil // fica a narração já gravada
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return nil
+	}
+	return string(b)
+}
+
+// GetMatchCommentary devolve a narração do jogo (ID da ESPN), do lance mais recente para o
+// mais antigo. found = false se o jogo não existe
+func GetMatchCommentary(ctx context.Context, espnMatchID int64) (entries []models.CommentaryEntry, found bool, err error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	var raw []byte
+	err = DB.QueryRowContext(ctx, `SELECT commentary FROM espn_matches WHERE espn_match_id = $1`, espnMatchID).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	entries = []models.CommentaryEntry{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &entries); err != nil {
+			return nil, true, err
+		}
+	}
+	slices.Reverse(entries)
+	return entries, true, nil
+}
+
+// ClearOldCommentary apaga a narração dos jogos com mais de maxAge (ocupa espaço e só
+// interessa no jogo e logo depois)
+func ClearOldCommentary(ctx context.Context, maxAge time.Duration) (int64, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	res, err := DB.ExecContext(ctx, `
+        UPDATE espn_matches SET commentary = NULL
+        WHERE commentary IS NOT NULL AND match_date < (now() AT TIME ZONE 'UTC') - $1 * INTERVAL '1 second'`,
+		maxAge.Seconds())
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }

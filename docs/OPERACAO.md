@@ -81,6 +81,13 @@ em 22/09). Por isso:
 - o "atualizar jogos" do admin (`/matches?update=true`) roda em segundo plano e também
   reconfere a ESPN. Use-o se um jogo terminou e continua como marcado.
 
+## Lance a lance
+
+A narração em português vem num pedido à parte à ESPN (com `lang=pt`, ela também traduz os
+tipos dos lances, que o resto do código lê em inglês). Por isso, cada jogo em andamento custa
+dois pedidos à ESPN por minuto. A narração fica em `espn_matches.commentary` por 30 dias; a
+rotina das 03:00 apaga as mais antigas (log: `Narrações com mais de 30 dias apagadas`).
+
 ## Aviso de jogo sem resultado
 
 A cada 30 minutos (a primeira volta, 10 minutos depois de o worker subir), o worker

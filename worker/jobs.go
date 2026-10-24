@@ -15,9 +15,10 @@ import (
 //     seguida do recálculo da classificação dessa liga
 //   - Jogos passados sem detalhes da ESPN: a cada 10 minutos
 //   - Artilharia/assistências da ESPN: a cada 6 horas
-//   - 03:00: times e elencos da football-data, vínculo com a ESPN, elencos da ESPN e a
+//   - 03:00: times e elencos da football-data, vínculo com a ESPN, elencos da ESPN, a
 //     temporada inteira das ligas que vêm só da ESPN (Série B, Copa do Brasil,
-//     Sul-Americana, Liga das Nações), pelo calendário da ESPN
+//     Sul-Americana, Liga das Nações), pelo calendário da ESPN, e a limpeza das narrações
+//     lance a lance com mais de 30 dias
 //   - Notificações push: a fila de avisos é lida a cada 10 segundos
 //   - API do Render: /health a cada 10 minutos, para ela não dormir (API_PUBLIC_URL)
 //   - Tamanho do banco: ao subir e todo dia ao meio-dia; push para o admin quando passar
@@ -149,6 +150,13 @@ func RunDailySync() {
 	// vivo só olha o dia de hoje. Reconfere na ESPN os últimos 3 dias de cada uma
 	for _, league := range services.FootballDataLeagues {
 		services.SyncESPNRecentDays(ctx, league, 3)
+	}
+
+	// Lance a lance só dos últimos 30 dias: a narração ocupa espaço e só interessa no jogo
+	if n, err := services.ClearOldCommentary(ctx); err != nil {
+		utils.CustomLog("JOBS", "Erro ao apagar as narrações antigas: %v", err)
+	} else if n > 0 {
+		utils.CustomLog("JOBS", "Narrações com mais de 30 dias apagadas: %d jogos", n)
 	}
 
 	utils.CustomLog("JOBS", "Sincronização diária finalizada!")

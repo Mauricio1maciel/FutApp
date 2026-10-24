@@ -1,13 +1,18 @@
 package services
 
 import (
+	"App-Futebol/database"
 	"App-Futebol/models"
+	"App-Futebol/utils"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Ex: "2026-27 UEFA Nations League" -> 2026 e 27
@@ -117,6 +122,16 @@ func FetchAndParseESPNMatch(matchID string, leagueCode string) (models.ESPNMatch
 		}
 	}
 
+	// Lance a lance: só de jogo em andamento ou encerrado nos últimos 30 dias (o worker
+	// apaga as narrações mais antigas). Sem ela, fica a que já está gravada
+	if (match.Status == "in" || match.Status == "post") && recentForCommentary(match.MatchDate, time.Now()) {
+		if c, err := fetchCommentaryPT(espnLeague, matchID); err != nil {
+			utils.CustomLog("WORKER_ESPN", "Narração do jogo %s indisponível: %v", matchID, err)
+		} else if len(c) > 0 {
+			match.Commentary = c
+		}
+	}
+
 	var lineups []models.ESPNLineupDB
 	for _, roster := range data.Rosters {
 		teamID, _ := strconv.ParseInt(roster.Team.ID, 10, 64)
@@ -189,4 +204,71 @@ func statsFromBoxscore(data models.ESPNSummaryResponse) *models.MatchStatistics 
 // isAssistedGoal: tipos de gol que podem ter assistência (gol contra e pênalti não têm)
 func isAssistedGoal(t string) bool {
 	return t == "Goal" || strings.HasPrefix(t, "Goal - ")
+}
+
+// Narração guardada por 30 dias: o lance a lance interessa no jogo e logo depois
+const commentaryMaxAge = 30 * 24 * time.Hour
+
+// ClearOldCommentary apaga as narrações com mais de 30 dias (rotina diária do worker)
+func ClearOldCommentary(ctx context.Context) (int64, error) {
+	return database.ClearOldCommentary(ctx, commentaryMaxAge)
+}
+
+func recentForCommentary(matchDate string, now time.Time) bool {
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04Z", "2006-01-02 15:04:05"} {
+		if start, err := time.Parse(layout, matchDate); err == nil {
+			return now.Sub(start) < commentaryMaxAge
+		}
+	}
+	return false
+}
+
+type espnCommentary struct {
+	Sequence int `json:"sequence"`
+	Time     struct {
+		DisplayValue string `json:"displayValue"`
+	} `json:"time"`
+	Text string `json:"text"`
+	Play struct {
+		Type struct {
+			Type string `json:"type"`
+		} `json:"type"`
+		Team struct {
+			DisplayName string `json:"displayName"`
+		} `json:"team"`
+	} `json:"play"`
+}
+
+// fetchCommentaryPT busca a narração em português num pedido à parte: com lang=pt, a ESPN
+// também traduz os tipos dos lances ("Yellow Card" vira "Cartão amarelo"), que o resto do
+// código lê em inglês
+func fetchCommentaryPT(espnLeague, matchID string) ([]models.CommentaryEntry, error) {
+	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/soccer/%s/summary?event=%s&lang=pt&region=br", espnLeague, matchID)
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ESPN respondeu %s", resp.Status)
+	}
+	var data struct {
+		Commentary []espnCommentary `json:"commentary"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
+	}
+	return commentaryEntries(data.Commentary), nil
+}
+
+func commentaryEntries(raw []espnCommentary) []models.CommentaryEntry {
+	out := make([]models.CommentaryEntry, 0, len(raw))
+	for _, c := range raw {
+		if strings.TrimSpace(c.Text) == "" {
+			continue
+		}
+		out = append(out, models.CommentaryEntry{Seq: c.Sequence, Minute: c.Time.DisplayValue,
+			Text: strings.TrimSpace(c.Text), Type: c.Play.Type.Type, Team: c.Play.Team.DisplayName})
+	}
+	return out
 }

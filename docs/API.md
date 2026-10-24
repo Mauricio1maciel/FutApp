@@ -149,6 +149,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /matches/calendar` | `leagues=BSA,PL`, `month=MM`, `year=YYYY` | `[{"date", "count"}]` |
 | `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s), com o relógio e os pênaltis da disputa (veja abaixo). Aqui `id_event` **e** `match_id` são o ID da ESPN |
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
+| `GET /match/commentary` | `id` (ID ESPN) | narração lance a lance em português, do mais recente para o mais antigo (veja abaixo) |
 | `GET /standings` | `league`, `[season]` | lista de posições |
 | `GET /standings?live=true` | `league`, `[season]` | a classificação **ao vivo** (veja abaixo) |
 | `GET /standings/chances` | `league`, `[season]` | chances de título, de cada zona e de cada posição final (veja abaixo) |
@@ -278,6 +279,26 @@ lista vem ordenada por grupo e posição.
 `code` é o valor do parâmetro `league` das outras rotas, e `season` é a temporada mais
 recente. A busca acha pelo nome, pelo código (`pl`, `bsa`) e por apelidos sem acento
 obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo").
+
+### `GET /match/commentary`: lance a lance
+
+A narração da ESPN em português, do lance mais recente para o mais antigo:
+```json
+[ { "seq": 111, "minute": "", "text": "Fim do Jogo, Corinthians 1, Vitória 1." },
+  { "seq": 110, "minute": "90'+13'", "text": "Rodrigo Garro (Corinthians) recebe cartão amarelo.",
+    "type": "yellow-card", "team": "Corinthians" } ]
+```
+- `type` é o tipo do lance na ESPN, bom para escolher um ícone. Os que aparecem (contados
+  em 6 jogos do Brasileirão): `foul`, `corner-awarded`, `substitution`, `shot-blocked`,
+  `shot-on-target`, `shot-off-target`, `yellow-card`, `offside`, `goal`, `handball`,
+  `kickoff`, `halftime`, `start-2nd-half`, `end-regular-time`, `start-delay`/`end-delay`,
+  `shot-hit-woodwork`, `red-card` e os de VAR (`var---referee-decision-confirmed`,
+  `var---referee-decision-cancelled`). Gol vem como `goal`, `goal---header`,
+  `goal---volley` ou `penalty---scored`: trate como gol todo tipo que começa com `goal` e
+  o `penalty---scored`. Pode vir vazio (ex: o fim do jogo).
+- `seq` é a ordem na narração e não muda entre as atualizações: use como chave da lista.
+- Durante o jogo, a narração é atualizada a cada minuto, junto com o placar. Jogo que não
+  começou, ou com mais de 30 dias, devolve `[]`. ID que não existe dá 404. Cache de 20 s.
 
 ### `GET /team/cards`: pendurados e suspensos
 

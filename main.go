@@ -137,6 +137,8 @@ func main() {
 
 	mux.HandleFunc("/matches/live", middlewares.JWTAuth(handlers.LiveMatchesHandler))
 	mux.HandleFunc("/match/history", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.MatchHistoryHandler)))
+	// Lance a lance em português (os últimos 30 dias)
+	mux.HandleFunc("/match/commentary", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.MatchCommentaryHandler)))
 	mux.HandleFunc("/h2h", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.HeadToHeadHandler)))
 	mux.HandleFunc("/player/stats", middlewares.JWTAuth(middlewares.CacheFor(5*time.Minute, handlers.PlayerStatsHandler)))
 	mux.HandleFunc("/team/stats", middlewares.JWTAuth(middlewares.CacheFor(5*time.Minute, handlers.TeamStatsHandler)))
