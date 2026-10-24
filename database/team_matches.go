@@ -4,6 +4,7 @@ import (
 	"App-Futebol/models"
 	"App-Futebol/utils"
 	"context"
+	"math"
 	"time"
 
 	"github.com/lib/pq"
@@ -81,6 +82,21 @@ func GetHeadToHead(ctx context.Context, team1, team2 int64) ([]models.Match, err
       AND m.status = 'FINISHED'
     ORDER BY m.match_date DESC`
 	return queryMatches(ctx, "GetHeadToHead", where, team1, team2)
+}
+
+// GetMatchByID devolve um jogo pelo ID do nosso banco (ErrNotFound se não existe)
+func GetMatchByID(ctx context.Context, matchID int64) (*models.Match, error) {
+	if matchID <= 0 || matchID > math.MaxInt32 {
+		return nil, ErrNotFound // matches.id é integer: fora da faixa, o banco recusaria a consulta
+	}
+	ms, err := queryMatches(ctx, "GetMatchByID", ` WHERE m.id = $1 LIMIT 1`, matchID)
+	if err != nil {
+		return nil, err
+	}
+	if len(ms) == 0 {
+		return nil, ErrNotFound
+	}
+	return &ms[0], nil
 }
 
 // GetFollowedMatches devolve, numa lista só, os jogos dos times, ligas e jogos que a pessoa

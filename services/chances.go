@@ -17,8 +17,7 @@ import (
 // Chances de título, de cada zona da tabela (vagas e rebaixamento) e de cada posição final
 // numa liga de pontos corridos. Os jogos que faltam são simulados milhares de vezes. O
 // placar de cada um sai de uma distribuição de Poisson com a força de ataque e de defesa
-// dos dois times na temporada e o mando de campo da própria liga (o modelo de Maher, base
-// das calculadoras de probabilidade de futebol).
+// dos dois times na temporada e o mando de campo da própria liga (services/strength.go).
 //
 // Desempate e vagas seguem a classificação: os critérios da liga e o AddZones, com os
 // campeões de copa já definidos. O confronto direto fica de fora: empate em todos os
@@ -98,8 +97,7 @@ func simulateChances(league, season string, current []models.Standing, table []m
 
 	// Ponto de partida: os jogos encerrados. Os em andamento são simulados a partir do
 	// placar de agora, só no tempo que falta
-	pts, wins, gf, ga, games := make([]int, n), make([]int, n), make([]int, n), make([]int, n), make([]int, n)
-	homeGoals, awayGoals, finished := 0, 0, 0
+	pts, wins, gf, ga := make([]int, n), make([]int, n), make([]int, n), make([]int, n)
 	type pending struct {
 		m    models.Match
 		h, a int
@@ -115,11 +113,6 @@ func simulateChances(league, season string, current []models.Standing, table []m
 		switch {
 		case m.Status == "FINISHED":
 			addResult(pts, wins, gf, ga, h, a, m.HomeScore, m.AwayScore)
-			games[h]++
-			games[a]++
-			homeGoals += m.HomeScore
-			awayGoals += m.AwayScore
-			finished++
 		case liveStatuses[m.Status]:
 			todo = append(todo, pending{m, h, a, leftToPlay(m, now)})
 		case m.Status == "CANCELLED" || m.Status == "CANCELED" || m.Status == "AWARDED":
@@ -129,29 +122,16 @@ func simulateChances(league, season string, current []models.Standing, table []m
 		}
 	}
 
-	// Força de cada time: gols marcados e sofridos por jogo, em relação à média da liga.
-	// Cinco jogos "na média" puxam para o meio quem jogou pouco
-	muHome, muAway := 1.4, 1.1 // médias típicas, até a liga ter jogos suficientes
-	if finished >= 20 && homeGoals+awayGoals > 0 {
-		muHome = float64(homeGoals) / float64(finished)
-		muAway = float64(awayGoals) / float64(finished)
-	}
-	perTeam := (muHome + muAway) / 2
-	const prior = 5.0
-	att, def := make([]float64, n), make([]float64, n)
-	for i := range att {
-		g := (float64(games[i]) + prior) * perTeam
-		att[i] = (float64(gf[i]) + prior*perTeam) / g
-		def[i] = (float64(ga[i]) + prior*perTeam) / g
-	}
+	strength := estimateStrength(table)
 	remaining := make([]simMatch, len(todo))
 	for i, p := range todo {
 		r := simMatch{home: p.h, away: p.a}
 		if liveStatuses[p.m.Status] {
 			r.baseHome, r.baseAway = p.m.HomeScore, p.m.AwayScore
 		}
-		r.expHome = math.Exp(-muHome * att[p.h] * def[p.a] * p.left)
-		r.expAway = math.Exp(-muAway * att[p.a] * def[p.h] * p.left)
+		lh, la := strength.expected(current[p.h].TeamID, current[p.a].TeamID)
+		r.expHome = math.Exp(-lh * p.left)
+		r.expAway = math.Exp(-la * p.left)
 		remaining[i] = r
 	}
 

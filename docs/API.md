@@ -86,7 +86,7 @@ minuto. Uso normal do app e do site não chega perto:
 | Rotas | Limite por endereço |
 |---|---|
 | `/auth/guest`, `/auth/login` | 20 por minuto (10 seguidos) |
-| `/search`, `/player/stats`, `/team/stats`, `/h2h`, `/standings?live=true`, `/standings?view=...`, `/standings/chances` | 60 por minuto (30 seguidos) |
+| `/search`, `/player/stats`, `/team/stats`, `/h2h`, `/match/preview`, `/standings?live=true`, `/standings?view=...`, `/standings/chances` | 60 por minuto (30 seguidos) |
 | as demais (menos `/health`) | 240 por minuto (120 seguidos) |
 
 Passou do limite: **429** com `{"error": "Muitos pedidos em pouco tempo. Tente de novo em N s."}`
@@ -150,6 +150,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s), com o relógio e os pênaltis da disputa (veja abaixo). Aqui `id_event` **e** `match_id` são o ID da ESPN |
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
 | `GET /match/commentary` | `id` (ID ESPN) | narração lance a lance em português, do mais recente para o mais antigo (veja abaixo) |
+| `GET /match/preview` | `match_id` (nosso) ou `id` (ID ESPN) | prévia do jogo: chances, posição, forma, confronto direto, suspensos e artilheiros (veja abaixo) |
 | `GET /standings` | `league`, `[season]` | lista de posições |
 | `GET /standings?live=true` | `league`, `[season]` | a classificação **ao vivo** (veja abaixo) |
 | `GET /standings?view=home` | `league`, `view=home\|away\|first\|second`, `[season]` | a classificação como mandante, como visitante, do 1º ou do 2º turno (veja abaixo) |
@@ -288,6 +289,36 @@ lista vem ordenada por grupo e posição.
 `code` é o valor do parâmetro `league` das outras rotas, e `season` é a temporada mais
 recente. A busca acha pelo nome, pelo código (`pl`, `bsa`) e por apelidos sem acento
 obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo").
+
+### `GET /match/preview`: prévia do jogo
+
+Tudo o que o torcedor olha antes do jogo, numa chamada (`?match_id=4821` ou `?id=401912521`):
+```json
+{ "match": { ...o jogo, no formato do /matches... },
+  "probabilities": { "home_win": 63.6, "draw": 21.7, "away_win": 14.7,
+                     "expected_home_goals": 1.87, "expected_away_goals": 0.77,
+                     "likely_scores": [ { "home": 1, "away": 0, "pct": 13.4 }, { "home": 2, "away": 0, "pct": 12.5 } ],
+                     "based_on_matches": 310 },
+  "home": { "team_id": 1783, "name": "CR Flamengo", "crest_url": "https://...", "position": 1,
+            "points": 67, "played": 31, "form": "VVEVV",
+            "suspended": [], "hanging": [ { "name": "Pedro", "yellow_cards": 2, ... } ],
+            "top_scorers": [ { "player_id": 210264, "name": "Pedro", "headshot_url": "...", "goals": 16 } ] },
+  "away": { ...igual... },
+  "h2h": { "played": 7, "home_wins": 4, "draws": 2, "away_wins": 1, "last": [ ...até 5 jogos... ] } }
+```
+- `probabilities`: o mesmo modelo das chances da tabela (força de ataque e de defesa dos
+  dois times nos jogos encerrados da competição na temporada, e o mando de campo dela).
+  `likely_scores` são os 5 placares mais prováveis. É a chance do jogo, não de passar de
+  fase: o agregado do mata-mata não entra. Jogo em campo neutro (final) é tratado como
+  qualquer outro.
+- `position`/`points`/`played`: da tabela da competição (vêm 0 quando ela não tem tabela).
+  Em copa com grupos, vem também `group_name`.
+- `form`: os últimos 5 jogos na competição. `suspended`/`hanging`: os mesmos do
+  `/team/cards`, só nas Séries A e B (nas outras, listas vazias). `top_scorers`: até 3
+  artilheiros do time na competição.
+- `h2h`: o confronto direto em qualquer competição, do ponto de vista do mandante deste
+  jogo (`home_wins` são as vitórias dele, em qualquer campo).
+- Cache de 5 min. Jogo que não existe dá 404.
 
 ### `GET /match/commentary`: lance a lance
 
