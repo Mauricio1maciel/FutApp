@@ -145,6 +145,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /h2h` | `team1`, `team2`, `[limit=10]` | confronto direto (veja abaixo) |
 | `GET /player/stats` | `id` (ID da ESPN, o mesmo do `/details?type=player`), `[season]` | estatísticas do jogador (veja abaixo) |
 | `GET /team/stats` | `id` (api_id), `[season]` | estatísticas do time na temporada (veja abaixo) |
+| `GET /team/cards` | `id` (api_id), `league`, `[season]` | pendurados e suspensos do time na competição (veja abaixo) |
 | `GET /matches/calendar` | `leagues=BSA,PL`, `month=MM`, `year=YYYY` | `[{"date", "count"}]` |
 | `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s), com o relógio e os pênaltis da disputa (veja abaixo). Aqui `id_event` **e** `match_id` são o ID da ESPN |
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
@@ -277,6 +278,31 @@ lista vem ordenada por grupo e posição.
 `code` é o valor do parâmetro `league` das outras rotas, e `season` é a temporada mais
 recente. A busca acha pelo nome, pelo código (`pl`, `bsa`) e por apelidos sem acento
 obrigatório ("brasileirão", "champions", "campeonato inglês", "copa do mundo").
+
+### `GET /team/cards`: pendurados e suspensos
+
+Por enquanto, Séries A e B (`BSA` e `BSB`); outra competição dá 404. Regra da CBF: o 3º
+amarelo (e o 6º, o 9º...) e o cartão vermelho tiram o jogador do jogo seguinte da
+competição. No jogo da expulsão, os amarelos não entram na conta (o segundo amarelo vira o
+vermelho).
+```json
+{ "team_id": 1769, "league": "BSA", "season": "2026", "yellows_for_suspension": 3,
+  "matches_counted": 31, "matches_without_data": 0,
+  "next_match": { "match_id": 4890, "date": "2026-10-24T21:30:00Z", "opponent": "RB Bragantino", "home": true },
+  "suspended": [ { "name": "Joaquín Piquerez", "espn_player_id": 237064, "yellow_cards": 3,
+                   "red_cards": 0, "status": "suspended", "reason": "3º amarelo" } ],
+  "hanging":   [ { "name": "Jhon Arias", "yellow_cards": 5, "red_cards": 0, "status": "hanging" } ],
+  "players":   [ ... todos com cartão, mais amarelos primeiro ... ] }
+```
+- `suspended`: fora do próximo jogo (`next_match`), com o motivo. `hanging`: pendurados (o
+  próximo amarelo suspende). `players`: todos os que levaram cartão na competição.
+- `yellow_cards` conta só os amarelos que valem para o acúmulo.
+- `matches_without_data`: jogos encerrados sem os lances da ESPN; os cartões deles ficam de
+  fora. Se não for 0, avise que a lista pode estar incompleta.
+- Não cobre gancho do STJD (suspensão de mais de um jogo), que não aparece nos dados da ESPN.
+- Conferido com o noticiário de 24/10/2026: Palmeiras sem Andreas Pereira (vermelho) e
+  Piquerez (3º amarelo), Bragantino sem Ramires (3º amarelo).
+- Cache de 5 min.
 
 ### `GET /matches/live`: relógio e pênaltis ao vivo
 

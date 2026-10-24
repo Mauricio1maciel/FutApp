@@ -140,6 +140,8 @@ func main() {
 	mux.HandleFunc("/h2h", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.HeadToHeadHandler)))
 	mux.HandleFunc("/player/stats", middlewares.JWTAuth(middlewares.CacheFor(5*time.Minute, handlers.PlayerStatsHandler)))
 	mux.HandleFunc("/team/stats", middlewares.JWTAuth(middlewares.CacheFor(5*time.Minute, handlers.TeamStatsHandler)))
+	// Pendurados e suspensos do time na competição (Séries A e B)
+	mux.HandleFunc("/team/cards", middlewares.JWTAuth(middlewares.CacheFor(5*time.Minute, handlers.TeamCardsHandler)))
 
 	// 🔔 NOTIFICAÇÕES PUSH: com o token de convidado (identifica o aparelho)
 	mux.HandleFunc("/push/register", middlewares.JWTAuth(handlers.PushRegisterHandler))
