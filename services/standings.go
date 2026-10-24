@@ -6,6 +6,13 @@ import (
 )
 
 func CalculateStandings(matches []models.Match) map[int64]*models.Standing {
+	return calculateStandingsSide(matches, "")
+}
+
+// calculateStandingsSide é o CalculateStandings só com os jogos em casa (side = "home") ou
+// fora ("away") de cada time; "" = todos. Os dois times de cada jogo entram na tabela
+// mesmo quando o jogo não conta para um deles
+func calculateStandingsSide(matches []models.Match, side string) map[int64]*models.Standing {
 
 	table := make(map[int64]*models.Standing)
 
@@ -35,29 +42,11 @@ func CalculateStandings(matches []models.Match) map[int64]*models.Standing {
 			continue
 		}
 
-		// --- Daqui para baixo é igual ---
-		home.Played++
-		away.Played++
-
-		home.GoalsFor += m.HomeScore
-		home.GoalsAgainst += m.AwayScore
-
-		away.GoalsFor += m.AwayScore
-		away.GoalsAgainst += m.HomeScore
-
-		if m.HomeScore > m.AwayScore {
-			home.Wins++
-			home.Points += 3
-			away.Losses++
-		} else if m.HomeScore < m.AwayScore {
-			away.Wins++
-			away.Points += 3
-			home.Losses++
-		} else {
-			home.Draws++
-			away.Draws++
-			home.Points++
-			away.Points++
+		if side != "away" {
+			addMatchResult(home, m.HomeScore, m.AwayScore)
+		}
+		if side != "home" {
+			addMatchResult(away, m.AwayScore, m.HomeScore)
 		}
 	}
 
@@ -66,6 +55,23 @@ func CalculateStandings(matches []models.Match) map[int64]*models.Standing {
 	}
 
 	return table
+}
+
+// addMatchResult soma um jogo ao time: gols pró, gols contra e o resultado
+func addMatchResult(t *models.Standing, goalsFor, goalsAgainst int) {
+	t.Played++
+	t.GoalsFor += goalsFor
+	t.GoalsAgainst += goalsAgainst
+	switch {
+	case goalsFor > goalsAgainst:
+		t.Wins++
+		t.Points += 3
+	case goalsFor < goalsAgainst:
+		t.Losses++
+	default:
+		t.Draws++
+		t.Points++
+	}
 }
 
 func MapToSlice(table map[int64]*models.Standing) []models.Standing {

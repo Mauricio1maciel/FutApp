@@ -243,6 +243,11 @@ func buildTable(rules tableRules, league, season string, matches, formFrom []mod
 // recentForm devolve os últimos 5 resultados de cada time ("VVEDV", do mais antigo para
 // o mais recente). Pênaltis não contam: o jogo terminou empatado.
 func recentForm(matches []models.Match) map[int64]string {
+	return recentFormSide(matches, "")
+}
+
+// recentFormSide é o recentForm só com os jogos em casa ("home") ou fora ("away")
+func recentFormSide(matches []models.Match, side string) map[int64]string {
 	finished := make([]models.Match, 0, len(matches))
 	for _, m := range matches {
 		if m.Status == "FINISHED" {
@@ -260,17 +265,21 @@ func recentForm(matches []models.Match) map[int64]string {
 		}
 		form[team] = f
 	}
-	for _, m := range finished {
+	result := func(goalsFor, goalsAgainst int) string {
 		switch {
-		case m.HomeScore > m.AwayScore:
-			add(m.APIHomeTeamID, "V")
-			add(m.APIAwayTeamID, "D")
-		case m.HomeScore < m.AwayScore:
-			add(m.APIHomeTeamID, "D")
-			add(m.APIAwayTeamID, "V")
-		default:
-			add(m.APIHomeTeamID, "E")
-			add(m.APIAwayTeamID, "E")
+		case goalsFor > goalsAgainst:
+			return "V"
+		case goalsFor < goalsAgainst:
+			return "D"
+		}
+		return "E"
+	}
+	for _, m := range finished {
+		if side != "away" {
+			add(m.APIHomeTeamID, result(m.HomeScore, m.AwayScore))
+		}
+		if side != "home" {
+			add(m.APIAwayTeamID, result(m.AwayScore, m.HomeScore))
 		}
 	}
 	return form

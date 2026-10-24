@@ -80,3 +80,26 @@ func ChancesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	utils.WriteJSON(w, http.StatusOK, result)
 }
+
+// ViewStandingsHandler: a classificação de um recorte da temporada.
+// GET /standings?league=BSA&view=home|away|first|second
+func ViewStandingsHandler(w http.ResponseWriter, r *http.Request) {
+	league := r.URL.Query().Get("league")
+	if league == "" {
+		utils.WriteError(w, http.StatusBadRequest, "Informe a liga")
+		return
+	}
+	season := services.ResolveSeason(r.Context(), league, r.URL.Query().Get("season"))
+
+	result, err := services.ViewStandings(r.Context(), league, season, r.URL.Query().Get("view"))
+	switch {
+	case errors.Is(err, services.ErrUnknownView):
+		utils.WriteError(w, http.StatusBadRequest, "view deve ser home (como mandante), away (como visitante), first (1º turno) ou second (2º turno)")
+	case errors.Is(err, services.ErrNoLeagueTable):
+		utils.WriteError(w, http.StatusNotFound, "Esta competição não tem tabela de pontos corridos")
+	case err != nil:
+		utils.WriteError(w, http.StatusInternalServerError, "Erro ao montar a classificação")
+	default:
+		utils.WriteJSON(w, http.StatusOK, result)
+	}
+}

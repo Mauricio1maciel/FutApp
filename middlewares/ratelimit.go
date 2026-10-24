@@ -42,7 +42,7 @@ func routeClass(r *http.Request) (rateClass, bool) {
 		return rateClass{}, false
 	case strings.HasPrefix(r.URL.Path, "/auth/"):
 		return classAuth, true
-	case heavyRoutes[r.URL.Path], r.URL.Path == "/standings" && r.URL.Query().Get("live") == "true":
+	case heavyRoutes[r.URL.Path], r.URL.Path == "/standings" && (r.URL.Query().Get("live") == "true" || r.URL.Query().Get("view") != ""):
 		return classHeavy, true
 	}
 	return classDefault, true

@@ -119,12 +119,17 @@ func main() {
 	// live=true: a tabela com os jogos em andamento contando, com cache mais curto
 	standings := middlewares.CacheFor(time.Minute, handlers.StandingsHandler)
 	liveStandings := middlewares.CacheFor(20*time.Second, handlers.LiveStandingsHandler)
+	// view=home|away|first|second: como mandante, como visitante, 1º e 2º turno
+	viewStandings := middlewares.CacheFor(time.Minute, handlers.ViewStandingsHandler)
 	mux.HandleFunc("/standings", middlewares.JWTAuth(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("live") == "true" {
+		switch {
+		case r.URL.Query().Get("live") == "true":
 			liveStandings(w, r)
-			return
+		case r.URL.Query().Get("view") != "":
+			viewStandings(w, r)
+		default:
+			standings(w, r)
 		}
-		standings(w, r)
 	}))
 	// Chances de título, vagas e rebaixamento: simula o que falta da temporada
 	mux.HandleFunc("/standings/chances", middlewares.JWTAuth(middlewares.CacheFor(2*time.Minute, handlers.ChancesHandler)))

@@ -86,7 +86,7 @@ minuto. Uso normal do app e do site não chega perto:
 | Rotas | Limite por endereço |
 |---|---|
 | `/auth/guest`, `/auth/login` | 20 por minuto (10 seguidos) |
-| `/search`, `/player/stats`, `/team/stats`, `/h2h`, `/standings?live=true`, `/standings/chances` | 60 por minuto (30 seguidos) |
+| `/search`, `/player/stats`, `/team/stats`, `/h2h`, `/standings?live=true`, `/standings?view=...`, `/standings/chances` | 60 por minuto (30 seguidos) |
 | as demais (menos `/health`) | 240 por minuto (120 seguidos) |
 
 Passou do limite: **429** com `{"error": "Muitos pedidos em pouco tempo. Tente de novo em N s."}`
@@ -152,6 +152,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /match/commentary` | `id` (ID ESPN) | narração lance a lance em português, do mais recente para o mais antigo (veja abaixo) |
 | `GET /standings` | `league`, `[season]` | lista de posições |
 | `GET /standings?live=true` | `league`, `[season]` | a classificação **ao vivo** (veja abaixo) |
+| `GET /standings?view=home` | `league`, `view=home\|away\|first\|second`, `[season]` | a classificação como mandante, como visitante, do 1º ou do 2º turno (veja abaixo) |
 | `GET /standings/chances` | `league`, `[season]` | chances de título, de cada zona e de cada posição final (veja abaixo) |
 | `GET /seasons` | `league` | `["2026", "2025", "2024", "2023"]`: inclui as temporadas antigas carregadas |
 | `GET /league/stats` | `league`, `[season]` | `{"top_scorers": [...], "top_assists": [...]}` |
@@ -233,6 +234,14 @@ Copa do Brasil têm vaga garantida na Libertadores, e o vice da Copa do Brasil g
 vaga a mais na pré-Libertadores. O backend lê o vencedor de cada final sozinho e a
 `zone` da tabela muda em até ~10 minutos depois do apito final. Quando o campeão já está
 na zona da Libertadores, a vaga passa para o próximo da tabela.
+
+**Recortes da tabela** (`/standings?league=BSA&view=home`): a classificação só com os jogos
+em casa de cada time (`home`, "melhor mandante"), só com os de fora (`away`), do 1º turno
+(`first`) ou do 2º turno (`second`; com 20 times, rodadas 1 a 19 e 20 a 38). Mesmo formato
+e mesmos critérios de desempate da `/standings`, com `form` só dos jogos do recorte e
+`zone` sempre vazia (as vagas são da tabela completa). Os jogos em andamento contam, como
+na `/standings`. Só ligas de pontos corridos; copa dá 404 e recorte desconhecido, 400.
+Cache de 1 min. Somando, casa + fora e 1º + 2º turno dão os pontos da tabela completa.
 
 **Chances** (`/standings/chances?league=BSA`): o que falta da temporada é simulado
 milhares de vezes, e cada time recebe a chance (em %) de terminar campeão, em cada zona
