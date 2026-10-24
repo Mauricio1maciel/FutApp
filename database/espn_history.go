@@ -80,8 +80,8 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
 	// 🔥 2. SALVAR NA ESPN_MATCHES (com pênaltis: o trigger leva para matches nas ligas
 	// que vêm só da ESPN)
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO espn_matches (espn_match_id, league, season, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name, home_penalty, away_penalty, statistics, commentary) 
-         VALUES ($1::BIGINT, $2, $3, NULLIF($4, '')::TIMESTAMP, $5, $6::BIGINT, $7, $8::BIGINT, $9, $10, $11, $12, $13, $14, $15, $16::JSONB, $17::JSONB)
+		`INSERT INTO espn_matches (espn_match_id, league, season, match_date, home_logo, espn_home_team_id, away_logo, espn_away_team_id, home_score, away_score, status, stage, group_name, home_penalty, away_penalty, statistics, commentary, videos) 
+         VALUES ($1::BIGINT, $2, $3, NULLIF($4, '')::TIMESTAMP, $5, $6::BIGINT, $7, $8::BIGINT, $9, $10, $11, $12, $13, $14, $15, $16::JSONB, $17::JSONB, $18::JSONB)
          ON CONFLICT (espn_match_id) DO UPDATE 
          SET home_score = EXCLUDED.home_score,
              away_score = EXCLUDED.away_score,
@@ -98,13 +98,15 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
              home_penalty = COALESCE(EXCLUDED.home_penalty, espn_matches.home_penalty),
              away_penalty = COALESCE(EXCLUDED.away_penalty, espn_matches.away_penalty),
              statistics = COALESCE(EXCLUDED.statistics, espn_matches.statistics),
-             commentary = COALESCE(EXCLUDED.commentary, espn_matches.commentary)`,
+             commentary = COALESCE(EXCLUDED.commentary, espn_matches.commentary),
+             videos = COALESCE(EXCLUDED.videos, espn_matches.videos)`,
 		match.MatchID, match.League, match.Season, match.MatchDate,
 		match.HomeLogo, match.ESPNHomeTeamID,
 		match.AwayLogo, match.ESPNAwayTeamID,
 		match.HomeScore, match.AwayScore, match.Status,
 		match.Stage, match.GroupName,
 		match.HomePenalty, match.AwayPenalty, statsJSON(match.Statistics), commentaryJSON(match.Commentary),
+		jsonOrNil(len(match.Videos), match.Videos),
 	)
 	if err != nil {
 		utils.CustomLog("DATABASE_ERRO", "Falha ao inserir partida: %v", err)
@@ -383,10 +385,16 @@ func statsJSON(s *models.MatchStatistics) interface{} {
 }
 
 func commentaryJSON(c []models.CommentaryEntry) interface{} {
-	if len(c) == 0 {
-		return nil // fica a narração já gravada
+	return jsonOrNil(len(c), c) // vazia: fica a narração já gravada
+}
+
+// jsonOrNil devolve o JSON da lista, ou NULL se ela está vazia (o COALESCE da gravação
+// mantém o que já estava gravado)
+func jsonOrNil(n int, v interface{}) interface{} {
+	if n == 0 {
+		return nil
 	}
-	b, err := json.Marshal(c)
+	b, err := json.Marshal(v)
 	if err != nil {
 		return nil
 	}
@@ -426,6 +434,102 @@ func ClearOldCommentary(ctx context.Context, maxAge time.Duration) (int64, error
 	res, err := DB.ExecContext(ctx, `
         UPDATE espn_matches SET commentary = NULL
         WHERE commentary IS NOT NULL AND match_date < (now() AT TIME ZONE 'UTC') - $1 * INTERVAL '1 second'`,
+		maxAge.Seconds())
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// GetMatchVideos devolve os vídeos do jogo (ID da ESPN), do mais novo para o mais antigo.
+// found = false se o jogo não existe
+func GetMatchVideos(ctx context.Context, espnMatchID int64) (videos []models.MatchVideo, found bool, err error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	var raw []byte
+	err = DB.QueryRowContext(ctx, `SELECT videos FROM espn_matches WHERE espn_match_id = $1`, espnMatchID).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	videos = []models.MatchVideo{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &videos); err != nil {
+			return nil, true, err
+		}
+	}
+	return videos, true, nil
+}
+
+// RecentESPNMatch é um jogo encerrado há pouco, com quantos vídeos já tem
+type RecentESPNMatch struct {
+	ESPNMatchID int64
+	League      string
+	Videos      int
+}
+
+// GetRecentFinishedESPNMatches devolve os jogos da ESPN encerrados que começaram há menos
+// de within
+func GetRecentFinishedESPNMatches(ctx context.Context, within time.Duration) ([]RecentESPNMatch, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	rows, err := DB.QueryContext(ctx, `
+        SELECT espn_match_id, COALESCE(league, ''), COALESCE(jsonb_array_length(videos), 0)
+        FROM espn_matches
+        WHERE status = 'post' AND COALESCE(league, '') <> ''
+          AND match_date > (now() AT TIME ZONE 'UTC') - $1 * INTERVAL '1 second'
+          AND match_date <= now() AT TIME ZONE 'UTC'
+        ORDER BY match_date DESC`, within.Seconds())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RecentESPNMatch
+	for rows.Next() {
+		var m RecentESPNMatch
+		if err := rows.Scan(&m.ESPNMatchID, &m.League, &m.Videos); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// UpdateMatchMedia grava a narração e os vídeos do jogo; lista vazia mantém a gravada.
+// changed = false quando nada mudou (não regrava)
+func UpdateMatchMedia(ctx context.Context, espnMatchID int64, commentary []models.CommentaryEntry, videos []models.MatchVideo) (bool, error) {
+	if len(commentary) == 0 && len(videos) == 0 {
+		return false, nil
+	}
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	res, err := DB.ExecContext(ctx, `
+        UPDATE espn_matches
+        SET commentary = COALESCE($2::JSONB, commentary), videos = COALESCE($3::JSONB, videos)
+        WHERE espn_match_id = $1
+          AND (commentary IS DISTINCT FROM COALESCE($2::JSONB, commentary)
+               OR videos IS DISTINCT FROM COALESCE($3::JSONB, videos))`,
+		espnMatchID, commentaryJSON(commentary), jsonOrNil(len(videos), videos))
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// ClearOldVideos apaga os vídeos dos jogos com mais de maxAge
+func ClearOldVideos(ctx context.Context, maxAge time.Duration) (int64, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	res, err := DB.ExecContext(ctx, `
+        UPDATE espn_matches SET videos = NULL
+        WHERE videos IS NOT NULL AND match_date < (now() AT TIME ZONE 'UTC') - $1 * INTERVAL '1 second'`,
 		maxAge.Seconds())
 	if err != nil {
 		return 0, err

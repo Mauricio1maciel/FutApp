@@ -151,6 +151,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
 | `GET /match/commentary` | `id` (ID ESPN) | narração lance a lance em português, do mais recente para o mais antigo (veja abaixo) |
 | `GET /match/preview` | `match_id` (nosso) ou `id` (ID ESPN) | prévia do jogo: chances, posição, forma, confronto direto, suspensos e artilheiros (veja abaixo) |
+| `GET /match/videos` | `id` (ID ESPN) | vídeos do jogo: gols, melhores momentos e entrevistas da ESPN Brasil (veja abaixo) |
 | `GET /standings` | `league`, `[season]` | lista de posições |
 | `GET /standings?live=true` | `league`, `[season]` | a classificação **ao vivo** (veja abaixo) |
 | `GET /standings?view=home` | `league`, `view=home\|away\|first\|second`, `[season]` | a classificação como mandante, como visitante, do 1º ou do 2º turno (veja abaixo) |
@@ -319,6 +320,25 @@ Tudo o que o torcedor olha antes do jogo, numa chamada (`?match_id=4821` ou `?id
 - `h2h`: o confronto direto em qualquer competição, do ponto de vista do mandante deste
   jogo (`home_wins` são as vitórias dele, em qualquer campo).
 - Cache de 5 min. Jogo que não existe dá 404.
+
+### `GET /match/videos`: gols e melhores momentos
+
+Os vídeos da ESPN Brasil do jogo: primeiro os melhores momentos e a compilação dos gols,
+depois o resto (entrevistas, reações), do mais novo para o mais antigo:
+```json
+[ { "id": "17402800", "title": "Corinthians fica no empate com o Vitória; VEJA os melhores momentos",
+    "duration_seconds": 242, "thumbnail": "https://...jpg",
+    "hls_url": "https://...m3u8", "mp4_url": "https://...mp4",
+    "web_url": "https://www.espn.com.br/video/clip/_/id/17402800",
+    "published_at": "2026-10-20T01:38:00Z", "highlights": true } ]
+```
+- Toque pelo `hls_url`: a qualidade se ajusta à conexão (de 180p a 720p, de 0,4 a 5,4 Mbps).
+  O `mp4_url` é a qualidade máxima (300 MB num vídeo de 4 minutos): use só no Wi-Fi ou
+  onde não houver HLS. `web_url` abre a página do vídeo no site da ESPN.
+- `highlights`: melhores momentos ou compilação dos gols (pelo título). Bom para destacar.
+- Os vídeos saem durante o jogo e até umas 5 horas depois do apito; o backend busca de
+  novo os jogos encerrados nas últimas 12 horas a cada 30 minutos. Ficam 90 dias.
+  Sem vídeos, `[]`; ID que não existe dá 404. Cache de 2 min.
 
 ### `GET /match/commentary`: lance a lance
 

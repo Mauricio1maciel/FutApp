@@ -39,6 +39,24 @@ type ESPNMatchDB struct {
 	// Narração lance a lance em português, gravada em espn_matches.commentary (nil = não
 	// buscada: fica a que já está gravada)
 	Commentary []CommentaryEntry `json:"-"`
+
+	// Vídeos da ESPN Brasil (gols, melhores momentos), em espn_matches.videos (nil = não
+	// buscados: ficam os já gravados)
+	Videos []MatchVideo `json:"-"`
+}
+
+// MatchVideo é um vídeo do jogo
+type MatchVideo struct {
+	ID              string `json:"id"`
+	Title           string `json:"title"`
+	Description     string `json:"description,omitempty"`
+	DurationSeconds int    `json:"duration_seconds"`
+	Thumbnail       string `json:"thumbnail"`
+	HLSURL          string `json:"hls_url"` // se ajusta à conexão (180p a 720p): o melhor para o celular
+	MP4URL          string `json:"mp4_url"` // qualidade máxima (centenas de MB): só no Wi-Fi ou sem HLS
+	WebURL          string `json:"web_url"` // a página do vídeo no espn.com.br
+	PublishedAt     string `json:"published_at"`
+	Highlights      bool   `json:"highlights"` // pelo título: "melhores momentos" ou "veja os gols"
 }
 
 // CommentaryEntry é um lance da narração da ESPN

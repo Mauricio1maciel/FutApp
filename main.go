@@ -144,6 +144,8 @@ func main() {
 	mux.HandleFunc("/match/history", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.MatchHistoryHandler)))
 	// Prévia do jogo: chances, forma, confronto direto, suspensos e artilheiros
 	mux.HandleFunc("/match/preview", middlewares.JWTAuth(middlewares.CacheFor(5*time.Minute, handlers.MatchPreviewHandler)))
+	// Vídeos dos gols e melhores momentos (os últimos 90 dias)
+	mux.HandleFunc("/match/videos", middlewares.JWTAuth(middlewares.CacheFor(2*time.Minute, handlers.MatchVideosHandler)))
 	// Lance a lance em português (os últimos 30 dias)
 	mux.HandleFunc("/match/commentary", middlewares.JWTAuth(middlewares.CacheFor(20*time.Second, handlers.MatchCommentaryHandler)))
 	mux.HandleFunc("/h2h", middlewares.JWTAuth(middlewares.CacheFor(10*time.Minute, handlers.HeadToHeadHandler)))

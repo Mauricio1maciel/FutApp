@@ -81,12 +81,18 @@ em 22/09). Por isso:
 - o "atualizar jogos" do admin (`/matches?update=true`) roda em segundo plano e também
   reconfere a ESPN. Use-o se um jogo terminou e continua como marcado.
 
-## Lance a lance
+## Lance a lance e vídeos
 
-A narração em português vem num pedido à parte à ESPN (com `lang=pt`, ela também traduz os
-tipos dos lances, que o resto do código lê em inglês). Por isso, cada jogo em andamento custa
-dois pedidos à ESPN por minuto. A narração fica em `espn_matches.commentary` por 30 dias; a
-rotina das 03:00 apaga as mais antigas (log: `Narrações com mais de 30 dias apagadas`).
+A narração e os vídeos (gols, melhores momentos) vêm do resumo da ESPN em português, num
+pedido à parte (com `lang=pt`, ela também traduz os tipos dos lances, que o resto do código
+lê em inglês). Por isso, cada jogo em andamento custa dois pedidos à ESPN por minuto.
+
+Os melhores momentos saem até umas 5 horas depois do apito, quando o placar ao vivo já
+parou de buscar o jogo: a cada 30 minutos, o worker busca de novo o resumo em português dos
+jogos encerrados nas últimas 12 horas (log: `Vídeos novos em N jogo(s)`).
+
+A narração fica em `espn_matches.commentary` por 30 dias e os vídeos, em
+`espn_matches.videos`, por 90; a rotina das 03:00 apaga os mais antigos.
 
 ## Aviso de jogo sem resultado
 

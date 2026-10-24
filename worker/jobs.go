@@ -18,7 +18,9 @@ import (
 //   - 03:00: times e elencos da football-data, vínculo com a ESPN, elencos da ESPN, a
 //     temporada inteira das ligas que vêm só da ESPN (Série B, Copa do Brasil,
 //     Sul-Americana, Liga das Nações), pelo calendário da ESPN, e a limpeza das narrações
-//     lance a lance com mais de 30 dias
+//     (mais de 30 dias) e dos vídeos (mais de 90)
+//   - Vídeos e narração dos jogos encerrados nas últimas 12 horas: a cada 30 minutos (os
+//     melhores momentos saem horas depois do apito)
 //   - Notificações push: a fila de avisos é lida a cada 10 segundos
 //   - API do Render: /health a cada 10 minutos, para ela não dormir (API_PUBLIC_URL)
 //   - Tamanho do banco: ao subir e todo dia ao meio-dia; push para o admin quando passar
@@ -42,6 +44,22 @@ func startDataJobs() {
 	go supervise("backup", loopBackup)
 	go protect("chaves do push no navegador", checkWebPushKeys)
 	go supervise("jogos sem resultado", loopStuckMatches)
+	go supervise("vídeos dos jogos", loopMatchMedia)
+}
+
+// loopMatchMedia busca de novo, a cada 30 minutos, os vídeos e a narração dos jogos
+// encerrados nas últimas 12 horas (services.RefreshRecentMatchMedia)
+func loopMatchMedia() {
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		if n, err := services.RefreshRecentMatchMedia(ctx); err != nil {
+			utils.CustomLog("JOBS", "Erro ao buscar os vídeos dos jogos: %v", err)
+		} else if n > 0 {
+			utils.CustomLog("JOBS", "Vídeos novos em %d jogo(s) encerrado(s)", n)
+		}
+		cancel()
+		time.Sleep(30 * time.Minute)
+	}
 }
 
 func loopFootballDataMatches() {
@@ -152,11 +170,12 @@ func RunDailySync() {
 		services.SyncESPNRecentDays(ctx, league, 3)
 	}
 
-	// Lance a lance só dos últimos 30 dias: a narração ocupa espaço e só interessa no jogo
-	if n, err := services.ClearOldCommentary(ctx); err != nil {
-		utils.CustomLog("JOBS", "Erro ao apagar as narrações antigas: %v", err)
-	} else if n > 0 {
-		utils.CustomLog("JOBS", "Narrações com mais de 30 dias apagadas: %d jogos", n)
+	// Lance a lance só dos últimos 30 dias e vídeos dos últimos 90: ocupam espaço e
+	// interessam no jogo e logo depois
+	if c, v, err := services.ClearOldMatchMedia(ctx); err != nil {
+		utils.CustomLog("JOBS", "Erro ao apagar narrações e vídeos antigos: %v", err)
+	} else if c+v > 0 {
+		utils.CustomLog("JOBS", "Apagados: narração de %d jogos (mais de 30 dias) e vídeos de %d (mais de 90)", c, v)
 	}
 
 	utils.CustomLog("JOBS", "Sincronização diária finalizada!")
