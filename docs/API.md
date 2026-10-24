@@ -466,11 +466,18 @@ aviso. A entrega é pelo Expo Push.
 | Gol | `⚽ GOL! Flamengo` | `Flamengo 1 x 0 Palmeiras · Pedro 23'` (autor quando a ESPN já informou) |
 | Gol anulado | `❌ Gol anulado · Flamengo` | `Flamengo 0 x 0 Palmeiras` (placar de agora) |
 | Cartão vermelho | `🟥 Cartão vermelho · Palmeiras` | `Gustavo Gómez 38' · Flamengo 1 x 0 Palmeiras` |
+| Pênalti marcado pelo VAR | `🖥️ Pênalti marcado pelo VAR · Flamengo` | `Flamengo 0 x 0 Palmeiras · 67'` (o time é quem ganhou o pênalti) |
+| Pênalti perdido | `❌ Pênalti perdido · Palmeiras` | `Raphael Veiga 12' · Flamengo 0 x 0 Palmeiras` |
+| Pênalti defendido | `🧤 Pênalti defendido · Flamengo` (quem defendeu) | `Raphael Veiga 12' · Flamengo 0 x 0 Palmeiras` (quem bateu) |
+| Pênalti na trave | `🥅 Pênalti na trave · Palmeiras` | `Raphael Veiga 12' · Flamengo 0 x 0 Palmeiras` |
+| Disputa de pênaltis | `🥅 Vai para os pênaltis!` | `Flamengo 1 x 1 Palmeiras` |
+| Intervalo | `⏸️ Intervalo` | `Flamengo 1 x 0 Palmeiras` |
 | Fim | `Fim de jogo` | `Flamengo 2 x 1 Palmeiras` (pênaltis: `1 (4) x (3) 1`) |
 
 **Tipos de aviso:** `lineup` (escalação confirmada), `start` (começou), `goal` (gol e gol
-anulado), `red_card` (cartão vermelho) e `end` (fim de jogo). Cada inscrição (time, liga ou
-jogo) recebe todos, a não ser que escolha:
+anulado), `penalty` (pênalti marcado pelo VAR, perdido, defendido ou na trave, e o começo da
+disputa de pênaltis), `red_card` (cartão vermelho), `halftime` (intervalo) e `end` (fim de
+jogo). Cada inscrição (time, liga ou jogo) recebe todos, a não ser que escolha:
 ```json
 POST /push/subscriptions  { "team_id": 1783, "kinds": ["goal", "red_card", "end"] }
 ```
@@ -485,7 +492,7 @@ POST /push/subscriptions  { "team_id": 1783, "kinds": ["goal", "red_card", "end"
 ```json
 { "matches": [4821], "teams": [1783], "leagues": ["BSA"],
   "kinds": { "matches": {}, "teams": { "1783": ["goal", "end"] }, "leagues": {} },
-  "available_kinds": ["lineup", "start", "goal", "red_card", "end"] }
+  "available_kinds": ["lineup", "start", "goal", "penalty", "red_card", "halftime", "end"] }
 ```
 
 **Gol anulado:** quando o placar cai (o VAR anulou, ou a fonte corrigiu), quem recebe os
@@ -494,6 +501,13 @@ do time volta a ser avisado. O aviso espera 3 minutos antes de sair: se o placar
 nesse tempo, era oscilação da fonte e ele não sai. Depois do apito final não há aviso de
 gol anulado (o "Fim de jogo" já traz o placar certo). Não tem tipo próprio na inscrição:
 vem junto com `goal`.
+
+**Pênaltis e intervalo:** saem dos lances da ESPN, um aviso por lance. O gol de pênalti
+já sai como gol. Na disputa de pênaltis, só o começo avisa (as cobranças uma a uma seriam
+dez avisos em poucos minutos; o "Fim de jogo" traz o placar dos pênaltis). O intervalo
+só avisa enquanto o 2º tempo não começou. Quem escolheu os tipos antes desta versão (lista
+sem `penalty`/`halftime`) não recebe os novos até marcá-los; quem recebe todos (sem
+escolha) já recebe.
 
 **Cartão vermelho:** *"🟥 Cartão vermelho · Palmeiras"* | *"Gustavo Gómez 38' · Flamengo
 1 x 0 Palmeiras"*. Um aviso por cartão, só com o jogo rolando (ou recém-acabado). Quando a
@@ -530,7 +544,7 @@ Cada notificação leva um `data` para o app abrir a tela do jogo ao ser tocada:
   "espn_match_id": "401861080", "espn_home": "819", "espn_away": "2029",
   "date": "2026-10-12T00:30:00Z" }
 ```
-`type` é `lineup`, `start`, `goal`, `goal_cancelled`, `red_card`, `end`, `test` ou `admin_alert`. `espn_match_id`, `espn_home`,
+`type` é `lineup`, `start`, `goal`, `goal_cancelled`, `penalty_awarded`, `penalty_missed`, `penalty_saved`, `penalty_woodwork`, `shootout`, `red_card`, `halftime`, `end`, `test` ou `admin_alert`. `espn_match_id`, `espn_home`,
 `espn_away` e `date` só vêm quando o backend os conhece. Todos os valores são texto.
 
 Os avisos saem do worker em até ~1 minuto depois do lance (o tempo de a ESPN atualizar

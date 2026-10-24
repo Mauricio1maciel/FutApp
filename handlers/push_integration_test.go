@@ -130,7 +130,7 @@ func TestRotasPush(t *testing.T) {
 	if teams, _ := kinds["teams"].(map[string]interface{}); !reflect.DeepEqual(teams["993001"], []interface{}{"goal", "end"}) {
 		t.Errorf("GET deveria mostrar os tipos do time, veio %v", out["kinds"])
 	}
-	if !reflect.DeepEqual(out["available_kinds"], []interface{}{"lineup", "start", "goal", "red_card", "end"}) {
+	if !reflect.DeepEqual(out["available_kinds"], []interface{}{"lineup", "start", "goal", "penalty", "red_card", "halftime", "end"}) {
 		t.Errorf("available_kinds: veio %v", out["available_kinds"])
 	}
 	if status != 200 || !reflect.DeepEqual(out["matches"], []interface{}{float64(m)}) ||

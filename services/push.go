@@ -170,22 +170,30 @@ func pushText(p database.PendingPush) (string, string) {
 		return title, placar
 
 	case "red_card":
-		title := "🟥 Cartão vermelho"
-		switch p.GoalSide {
-		case "home":
-			title += " · " + p.HomeTeam
-		case "away":
-			title += " · " + p.AwayTeam
-		}
+		return withTeam("🟥 Cartão vermelho", sideTeam(p, p.GoalSide)), playerFirst(p, placar)
+
+	case "penalty_awarded":
 		body := placar
-		if p.Scorer != "" {
-			expulso := p.Scorer
-			if p.Minute != "" {
-				expulso += " " + p.Minute
-			}
-			body = expulso + " · " + placar
+		if p.Minute != "" {
+			body += " · " + p.Minute
 		}
-		return title, body
+		return withTeam("🖥️ Pênalti marcado pelo VAR", sideTeam(p, p.GoalSide)), body
+
+	case "penalty_missed":
+		return withTeam("❌ Pênalti perdido", sideTeam(p, p.GoalSide)), playerFirst(p, placar)
+
+	case "penalty_saved":
+		// O lance vem do lado de quem bateu: quem defendeu é o outro time
+		return withTeam("🧤 Pênalti defendido", sideTeam(p, otherSide(p.GoalSide))), playerFirst(p, placar)
+
+	case "penalty_woodwork":
+		return withTeam("🥅 Pênalti na trave", sideTeam(p, p.GoalSide)), playerFirst(p, placar)
+
+	case "shootout":
+		return "🥅 Vai para os pênaltis!", placar
+
+	case "halftime":
+		return "⏸️ Intervalo", placar
 
 	case "end":
 		if p.HomePenalty != nil && p.AwayPenalty != nil {
@@ -202,6 +210,47 @@ func pushText(p database.PendingPush) (string, string) {
 		return "Escalações confirmadas 📋", body
 	}
 	return "", ""
+}
+
+// sideTeam: o nome do time do lado (home | away), vazio se o lado é desconhecido
+func sideTeam(p database.PendingPush, side string) string {
+	switch side {
+	case "home":
+		return p.HomeTeam
+	case "away":
+		return p.AwayTeam
+	}
+	return ""
+}
+
+func otherSide(side string) string {
+	switch side {
+	case "home":
+		return "away"
+	case "away":
+		return "home"
+	}
+	return ""
+}
+
+// withTeam: "🟥 Cartão vermelho · Palmeiras" (sem o time, se o lado é desconhecido)
+func withTeam(title, team string) string {
+	if team == "" {
+		return title
+	}
+	return title + " · " + team
+}
+
+// playerFirst: "Gustavo Gómez 38' · Flamengo 1 x 0 Palmeiras" (só o placar, sem o jogador)
+func playerFirst(p database.PendingPush, placar string) string {
+	if p.Scorer == "" {
+		return placar
+	}
+	who := p.Scorer
+	if p.Minute != "" {
+		who += " " + p.Minute
+	}
+	return who + " · " + placar
 }
 
 // pushData vai junto da notificação: o app usa para abrir a tela do jogo

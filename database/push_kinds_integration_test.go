@@ -172,3 +172,93 @@ func TestRecentForPush(t *testing.T) {
 		}
 	}
 }
+
+// Pênaltis e intervalo: cada lance avisa uma vez; as cobranças da disputa não avisam uma
+// a uma; o intervalo só avisa enquanto o 2º tempo não começou
+func TestPushPenaltisEIntervalo(t *testing.T) {
+	openTestDB(t)
+	ctx := context.Background()
+	m := newTestMatch(t, 7770701, -50*time.Minute, "IN_PLAY", 0, 0)
+	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
+	newTestDevice(t, "teste-push-2", "ExponentPushToken[t2]")
+	SubscribeMatch(ctx, "teste-push-1", m, nil, false)
+	SubscribeMatch(ctx, "teste-push-2", m, []string{"goal"}, true)
+
+	avisos := func() []string {
+		t.Helper()
+		rows, err := DB.Query(`SELECT kind || ' ' || goal_side || ' ' || player || ' ' || minute FROM push_outbox
+                               WHERE match_id = $1 AND kind NOT IN ('start', 'goal', 'end') ORDER BY id`, m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		out := []string{}
+		for rows.Next() {
+			var a string
+			rows.Scan(&a)
+			out = append(out, a)
+		}
+		return out
+	}
+	jogo := models.ESPNMatchDB{
+		MatchID: "9990701", League: tstLeague, Season: "2026", Status: "in",
+		MatchDate:      time.Now().UTC().Add(-50 * time.Minute).Format("2006-01-02T15:04Z"),
+		ESPNHomeTeamID: tstESPNHome, ESPNAwayTeamID: tstESPNAway, HomeScore: "0", AwayScore: "0",
+	}
+	lineups := []models.ESPNLineupDB{
+		{MatchID: "9990701", ESPNTeamID: tstESPNAway, ESPNPlayerID: 1, PlayerName: "Batedor Fora", IsStarter: true},
+	}
+	events := []models.ESPNEventDB{
+		{MatchID: "9990701", Minute: "20'", EventType: "VAR - Penalty Awarded", ESPNTeamID: tstESPNHome},
+		{MatchID: "9990701", Minute: "22'", EventType: "Penalty - Saved", ESPNTeamID: tstESPNHome, PlayerName: "Batedor Casa"},
+		{MatchID: "9990701", Minute: "40'", EventType: "Penalty - Missed", PlayerName: "Batedor Fora"}, // sem time
+		{MatchID: "9990701", Minute: "45'+2'", EventType: "Halftime"},
+	}
+	for i := 0; i < 2; i++ { // a gravação do minuto seguinte não repete
+		if err := SaveFullMatchHistory(ctx, jogo, lineups, events); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"penalty_awarded home  20'", "penalty_saved home Batedor Casa 22'", "penalty_missed away Batedor Fora 40'", "halftime   "}
+	if got := avisos(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("primeiro tempo:\n  veio     %q\n  esperado %q", got, want)
+	}
+	// Vai para quem recebe pênaltis (todos os tipos), não para quem só recebe gols
+	if tokens, _ := GetPushTokensForMatch(ctx, m, "penalty_missed"); !reflect.DeepEqual(tokens, []string{"ExponentPushToken[t1]"}) {
+		t.Errorf("pênalti perdido: esperado só quem recebe pênaltis, veio %v", tokens)
+	}
+
+	// Disputa de pênaltis: um aviso no começo, e as cobranças não avisam uma a uma
+	events = append(events,
+		models.ESPNEventDB{MatchID: "9990701", Minute: "46'", EventType: "Start 2nd Half"},
+		models.ESPNEventDB{MatchID: "9990701", Minute: "120'", EventType: "Start Shootout"},
+		models.ESPNEventDB{MatchID: "9990701", Minute: "120'", EventType: "Penalty - Saved", ESPNTeamID: tstESPNAway, PlayerName: "Batedor Fora"},
+		models.ESPNEventDB{MatchID: "9990701", Minute: "120'", EventType: "Penalty - Missed", ESPNTeamID: tstESPNHome, PlayerName: "Batedor Casa"},
+	)
+	if err := SaveFullMatchHistory(ctx, jogo, lineups, events); err != nil {
+		t.Fatal(err)
+	}
+	if got := avisos(); len(got) != 5 || got[4] != "shootout   120'" {
+		t.Errorf("disputa: esperado só o aviso do começo, veio %q", got)
+	}
+
+	// Worker que subiu no 2º tempo: o intervalo que já passou não avisa
+	m2 := newTestMatch(t, 7770702, -80*time.Minute, "IN_PLAY", 0, 0)
+	SubscribeMatch(ctx, "teste-push-1", m2, nil, false)
+	jogo2 := jogo
+	jogo2.MatchID = "9990702"
+	jogo2.MatchDate = time.Now().UTC().Add(-80 * time.Minute).Format("2006-01-02T15:04Z")
+	mustExec(t, `UPDATE matches SET api_home_team_id = $2, api_away_team_id = $3 WHERE id = $1`, m2, tstAway, tstHome)
+	jogo2.ESPNHomeTeamID, jogo2.ESPNAwayTeamID = tstESPNAway, tstESPNHome
+	if err := SaveFullMatchHistory(ctx, jogo2, nil, []models.ESPNEventDB{
+		{MatchID: "9990702", Minute: "45'", EventType: "Halftime"},
+		{MatchID: "9990702", Minute: "46'", EventType: "Start 2nd Half"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	DB.QueryRow(`SELECT count(*) FROM push_outbox WHERE match_id = $1 AND kind = 'halftime'`, m2).Scan(&n)
+	if n != 0 {
+		t.Errorf("intervalo que já passou não deveria avisar, veio %d", n)
+	}
+}

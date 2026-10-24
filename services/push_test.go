@@ -48,6 +48,24 @@ func TestPushText(t *testing.T) {
 		{"cartão vermelho sem lado nem jogador", func(p *database.PendingPush) {
 			p.Kind = "red_card"
 		}, "🟥 Cartão vermelho", "Flamengo 0 x 0 Palmeiras"},
+		{"pênalti marcado pelo VAR para o mandante", func(p *database.PendingPush) {
+			p.Kind, p.GoalSide, p.Minute = "penalty_awarded", "home", "67'"
+		}, "🖥️ Pênalti marcado pelo VAR · Flamengo", "Flamengo 0 x 0 Palmeiras · 67'"},
+		{"pênalti perdido pelo visitante", func(p *database.PendingPush) {
+			p.Kind, p.GoalSide, p.Scorer, p.Minute = "penalty_missed", "away", "Raphael Veiga", "12'"
+		}, "❌ Pênalti perdido · Palmeiras", "Raphael Veiga 12' · Flamengo 0 x 0 Palmeiras"},
+		{"pênalti defendido: o time no título é o de quem defendeu", func(p *database.PendingPush) {
+			p.Kind, p.GoalSide, p.Scorer, p.Minute = "penalty_saved", "away", "Raphael Veiga", "12'"
+		}, "🧤 Pênalti defendido · Flamengo", "Raphael Veiga 12' · Flamengo 0 x 0 Palmeiras"},
+		{"pênalti na trave, lado desconhecido", func(p *database.PendingPush) {
+			p.Kind = "penalty_woodwork"
+		}, "🥅 Pênalti na trave", "Flamengo 0 x 0 Palmeiras"},
+		{"começo da disputa de pênaltis", func(p *database.PendingPush) {
+			p.Kind, p.HomeScore, p.AwayScore = "shootout", 1, 1
+		}, "🥅 Vai para os pênaltis!", "Flamengo 1 x 1 Palmeiras"},
+		{"intervalo", func(p *database.PendingPush) {
+			p.Kind, p.HomeScore = "halftime", 2
+		}, "⏸️ Intervalo", "Flamengo 2 x 0 Palmeiras"},
 		{"escalação, no horário de Brasília", func(p *database.PendingPush) {
 			p.Kind = "lineup"
 			p.MatchDate = time.Date(2026, 10, 15, 0, 30, 0, 0, time.UTC)

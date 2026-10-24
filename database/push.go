@@ -164,8 +164,20 @@ func GetPushToken(ctx context.Context, deviceID string) (string, error) {
 }
 
 // SubscribeMatch passa a seguir um jogo (repetir não dá erro)
-// PushKinds são os tipos de aviso, na ordem em que acontecem no jogo
-var PushKinds = []string{"lineup", "start", "goal", "red_card", "end"}
+// PushKinds são os tipos de aviso que a pessoa escolhe ao seguir, na ordem do jogo
+var PushKinds = []string{"lineup", "start", "goal", "penalty", "red_card", "halftime", "end"}
+
+// subscriptionKind é o tipo de inscrição que recebe cada aviso da fila: o gol anulado vai
+// para quem recebe gols; os lances de pênalti, para quem recebe pênaltis
+func subscriptionKind(kind string) string {
+	switch kind {
+	case "goal_cancelled":
+		return "goal"
+	case "penalty_awarded", "penalty_missed", "penalty_saved", "penalty_woodwork", "shootout":
+		return "penalty"
+	}
+	return kind
+}
 
 // kindsArray: nil = NULL (todos os tipos)
 func kindsArray(kinds []string) interface{} {
@@ -359,9 +371,7 @@ func ResolveMatchIDByESPN(ctx context.Context, espnMatchID int64) (int64, error)
 // GetPushTargetsForMatch devolve os aparelhos (app e navegador) que devem receber um
 // aviso desse tipo do jogo
 func GetPushTargetsForMatch(ctx context.Context, matchID int64, kind string) ([]PushTarget, error) {
-	if kind == "goal_cancelled" {
-		kind = "goal" // o gol anulado vai para quem recebe os avisos de gol
-	}
+	kind = subscriptionKind(kind)
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
@@ -407,10 +417,10 @@ func GetPushTokensForMatch(ctx context.Context, matchID int64, kind string) ([]s
 type PendingPush struct {
 	ID          int64
 	MatchID     int64
-	Kind        string // lineup | start | goal | goal_cancelled | red_card | end
+	Kind        string // lineup | start | goal | goal_cancelled | penalty_* | shootout | red_card | halftime | end
 	HomeScore   int
 	AwayScore   int
-	GoalSide    string // gol e gol anulado: home | away | both; cartão vermelho: home | away | "" (lado desconhecido)
+	GoalSide    string // gol e gol anulado: home | away | both; cartão e pênalti: home | away | "" (lado desconhecido)
 	HomePenalty *int
 	AwayPenalty *int
 	League      string
@@ -575,21 +585,55 @@ func enqueueLineupPush(ctx context.Context, tx *sql.Tx, match models.ESPNMatchDB
 // enqueueRedCardPushes anota um aviso para cada cartão vermelho novo do jogo. Os eventos
 // vêm da ESPN em ordem; match_push_state.reds_notified guarda quantos já foram avisados.
 // Só para jogo rolando ou que acabou há pouco: a carga de jogos antigos não vira aviso.
-func enqueueRedCardPushes(ctx context.Context, tx *sql.Tx, match models.ESPNMatchDB, events []models.ESPNEventDB, lineups []models.ESPNLineupDB) error {
-	var reds []models.ESPNEventDB
+// Lances que viram aviso de pênalti (inscrição "penalty"), com o tipo na fila. O gol de
+// pênalti já sai como gol. O time do lance é quem ganhou o pênalti (VAR) ou quem bateu
+var penaltyEventKinds = map[string]string{
+	"VAR - Penalty Awarded":  "penalty_awarded",
+	"Penalty - Missed":       "penalty_missed",
+	"Penalty - Saved":        "penalty_saved",
+	"Penalty - Hit Woodwork": "penalty_woodwork",
+}
+
+type eventPush struct {
+	kind  string
+	event models.ESPNEventDB
+}
+
+// enqueueEventPushes anota os avisos que saem dos lances da ESPN: cartão vermelho,
+// pênaltis (marcado pelo VAR, perdido, defendido, na trave e o começo da disputa) e o
+// intervalo. O já avisado de cada jogo fica em match_push_state: o worker grava os mesmos
+// lances a cada minuto, e cada um avisa uma vez só.
+//
+// Depois que a disputa de pênaltis começa, as cobranças não avisam uma a uma (seriam dez
+// avisos em poucos minutos): o "Fim de jogo" traz o placar dos pênaltis.
+func enqueueEventPushes(ctx context.Context, tx *sql.Tx, match models.ESPNMatchDB, events []models.ESPNEventDB, lineups []models.ESPNLineupDB) error {
+	var reds, penalties []eventPush
+	halftime, secondHalf, shootout := false, false, false
 	for _, e := range events {
-		if e.EventType == "Red Card" {
-			reds = append(reds, e)
+		switch {
+		case e.EventType == "Red Card":
+			reds = append(reds, eventPush{"red_card", e})
+		case e.EventType == "Start Shootout" && !shootout:
+			penalties = append(penalties, eventPush{"shootout", e})
+			shootout = true
+		case penaltyEventKinds[e.EventType] != "" && !shootout:
+			penalties = append(penalties, eventPush{penaltyEventKinds[e.EventType], e})
+		case e.EventType == "Halftime":
+			halftime = true
+		case e.EventType == "Start 2nd Half":
+			secondHalf = true
 		}
 	}
-	if len(reds) == 0 || !recentForPush(match, time.Now()) {
+	if (len(reds) == 0 && len(penalties) == 0 && !halftime) || !recentForPush(match, time.Now()) {
 		return nil
 	}
 
 	var matchID int64
-	var notified int
+	var redsNotified, penaltiesNotified int
+	var halftimeNotified bool
 	err := tx.QueryRowContext(ctx, `
-        SELECT m.id, COALESCE(s.reds_notified, 0)
+        SELECT m.id, COALESCE(s.reds_notified, 0), COALESCE(s.penalties_notified, 0),
+               COALESCE(s.halftime_notified, false)
         FROM matches m
         JOIN teams th ON th.api_id = m.api_home_team_id
         JOIN teams ta ON ta.api_id = m.api_away_team_id
@@ -598,41 +642,66 @@ func enqueueRedCardPushes(ctx context.Context, tx *sql.Tx, match models.ESPNMatc
           AND ta.espn_team_id = $2
           AND m.match_date::date = NULLIF($3, '')::timestamp::date
           AND push_match_has_followers(m.id, m.api_home_team_id, m.api_away_team_id)
-        LIMIT 1`, match.ESPNHomeTeamID, match.ESPNAwayTeamID, match.MatchDate).Scan(&matchID, &notified)
+        LIMIT 1`, match.ESPNHomeTeamID, match.ESPNAwayTeamID, match.MatchDate).
+		Scan(&matchID, &redsNotified, &penaltiesNotified, &halftimeNotified)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil // ninguém segue o jogo (ou ele ainda não tem vínculo)
 	}
-	if err != nil || len(reds) <= notified {
+	if err != nil {
 		return err
 	}
 
-	// O time do evento às vezes vem vazio: o lado sai da escalação do jogador
+	// O time do lance às vezes vem vazio: o lado sai da escalação do jogador
 	playerTeam := map[string]int64{}
 	for _, l := range lineups {
 		playerTeam[l.PlayerName] = l.ESPNTeamID
 	}
-	for _, e := range reds[notified:] {
-		team := e.ESPNTeamID
+	enqueue := func(p eventPush) error {
+		team := p.event.ESPNTeamID
 		if team == 0 {
-			team = playerTeam[e.PlayerName]
+			team = playerTeam[p.event.PlayerName]
 		}
 		side := ""
-		switch team {
-		case match.ESPNHomeTeamID:
+		switch {
+		case p.kind == "shootout" || p.kind == "halftime":
+		case team == match.ESPNHomeTeamID:
 			side = "home"
-		case match.ESPNAwayTeamID:
+		case team == match.ESPNAwayTeamID:
 			side = "away"
 		}
-		if _, err := tx.ExecContext(ctx, `
+		_, err := tx.ExecContext(ctx, `
             INSERT INTO push_outbox (match_id, kind, home_score, away_score, goal_side, player, minute)
-            SELECT id, 'red_card', COALESCE(home_score, 0), COALESCE(away_score, 0), $2, $3, $4
-            FROM matches WHERE id = $1`, matchID, side, e.PlayerName, e.Minute); err != nil {
+            SELECT id, $2, COALESCE(home_score, 0), COALESCE(away_score, 0), $3, $4, $5
+            FROM matches WHERE id = $1`, matchID, p.kind, side, p.event.PlayerName, p.event.Minute)
+		return err
+	}
+
+	for _, list := range []struct {
+		pushes   []eventPush
+		notified int
+	}{{reds, redsNotified}, {penalties, penaltiesNotified}} {
+		for _, p := range list.pushes[min(list.notified, len(list.pushes)):] {
+			if err := enqueue(p); err != nil {
+				return err
+			}
+		}
+	}
+	// O intervalo só avisa enquanto o 2º tempo não começou: o worker que subiu no meio do
+	// jogo não avisa um intervalo que já passou
+	if halftime && !halftimeNotified && !secondHalf {
+		if err := enqueue(eventPush{kind: "halftime"}); err != nil {
 			return err
 		}
 	}
+
 	_, err = tx.ExecContext(ctx, `
-        INSERT INTO match_push_state (match_id, reds_notified) VALUES ($1, $2)
-        ON CONFLICT (match_id) DO UPDATE SET reds_notified = EXCLUDED.reds_notified`, matchID, len(reds))
+        INSERT INTO match_push_state (match_id, reds_notified, penalties_notified, halftime_notified)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (match_id) DO UPDATE
+        SET reds_notified = GREATEST(match_push_state.reds_notified, EXCLUDED.reds_notified),
+            penalties_notified = GREATEST(match_push_state.penalties_notified, EXCLUDED.penalties_notified),
+            halftime_notified = match_push_state.halftime_notified OR EXCLUDED.halftime_notified`,
+		matchID, max(redsNotified, len(reds)), max(penaltiesNotified, len(penalties)), halftimeNotified || halftime)
 	return err
 }
 

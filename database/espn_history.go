@@ -185,14 +185,14 @@ func SaveFullMatchHistory(ctx context.Context, match models.ESPNMatchDB, lineups
 		}
 	}
 
-	// Aviso de cartão vermelho, isolado do mesmo jeito
+	// Avisos dos lances (cartão vermelho, pênaltis e intervalo), isolados do mesmo jeito
 	if len(events) > 0 {
-		if _, err := tx.ExecContext(ctx, `SAVEPOINT push_red_card`); err == nil {
-			if err := enqueueRedCardPushes(ctx, tx, match, events, lineups); err != nil {
-				utils.CustomLog("DATABASE_ERRO", "Aviso de cartão vermelho do jogo %s não foi anotado: %v", match.MatchID, err)
-				tx.ExecContext(ctx, `ROLLBACK TO SAVEPOINT push_red_card`)
+		if _, err := tx.ExecContext(ctx, `SAVEPOINT push_events`); err == nil {
+			if err := enqueueEventPushes(ctx, tx, match, events, lineups); err != nil {
+				utils.CustomLog("DATABASE_ERRO", "Avisos dos lances do jogo %s não foram anotados: %v", match.MatchID, err)
+				tx.ExecContext(ctx, `ROLLBACK TO SAVEPOINT push_events`)
 			} else {
-				tx.ExecContext(ctx, `RELEASE SAVEPOINT push_red_card`)
+				tx.ExecContext(ctx, `RELEASE SAVEPOINT push_events`)
 			}
 		}
 	}
