@@ -302,7 +302,7 @@ Tudo o que o torcedor olha antes do jogo, numa chamada (`?match_id=4821` ou `?id
                      "based_on_matches": 310 },
   "home": { "team_id": 1783, "name": "CR Flamengo", "crest_url": "https://...", "position": 1,
             "points": 67, "played": 31, "form": "VVEVV",
-            "suspended": [], "hanging": [ { "name": "Pedro", "yellow_cards": 2, ... } ],
+            "suspended": [], "hanging": [ { "name": "Pedro", "yellow_cards": 2, "ban_if_booked": 1, ... } ],
             "top_scorers": [ { "player_id": 210264, "name": "Pedro", "headshot_url": "...", "goals": 16 } ] },
   "away": { ...igual... },
   "h2h": { "played": 7, "home_wins": 4, "draws": 2, "away_wins": 1, "last": [ ...até 5 jogos... ] } }
@@ -315,8 +315,8 @@ Tudo o que o torcedor olha antes do jogo, numa chamada (`?match_id=4821` ou `?id
 - `position`/`points`/`played`: da tabela da competição (vêm 0 quando ela não tem tabela).
   Em copa com grupos, vem também `group_name`.
 - `form`: os últimos 5 jogos na competição. `suspended`/`hanging`: os mesmos do
-  `/team/cards`, só nas Séries A e B (nas outras, listas vazias). `top_scorers`: até 3
-  artilheiros do time na competição.
+  `/team/cards`, com a regra de cada competição. `top_scorers`: até 3 artilheiros do time
+  na competição.
 - `h2h`: o confronto direto em qualquer competição, do ponto de vista do mandante deste
   jogo (`home_wins` são as vitórias dele, em qualquer campo).
 - Cache de 5 min. Jogo que não existe dá 404.
@@ -362,28 +362,57 @@ A narração da ESPN em português, do lance mais recente para o mais antigo:
 
 ### `GET /team/cards`: pendurados e suspensos
 
-Por enquanto, Séries A e B (`BSA` e `BSB`); outra competição dá 404. Regra da CBF: o 3º
-amarelo (e o 6º, o 9º...) e o cartão vermelho tiram o jogador do jogo seguinte da
-competição. No jogo da expulsão, os amarelos não entram na conta (o segundo amarelo vira o
-vermelho).
+Para todas as competições do app, cada uma com a sua regra (conferida nos regulamentos e no
+noticiário em outubro de 2026):
+
+| Competição | Suspensão por amarelos | Zera |
+|---|---|---|
+| Séries A e B, Copa do Brasil | 3º, 6º, 9º... amarelo: 1 jogo | não |
+| Libertadores, Sul-Americana | 3º, 6º, 9º... amarelo: 1 jogo | antes da semifinal |
+| Premier League | 5 até o 19º jogo do time: 1 jogo; 10 até o 32º: 2 jogos; 15: 3 jogos | não |
+| La Liga, Bundesliga, Ligue 1 | 5º, 10º, 15º... amarelo: 1 jogo | não |
+| Serie A | 5º, 10º, 14º e 17º amarelo e, do 19º em diante, cada amarelo: 1 jogo | não |
+| Champions League | 4º amarelo e depois a cada 2 (6º, 8º...): 1 jogo | depois das quartas |
+| Copa do Mundo | 2º, 4º... amarelo: 1 jogo | depois da fase de grupos e das quartas |
+| Liga das Nações | 2º, 4º... amarelo: 1 jogo | depois das quartas, com as suspensões por amarelo pendentes |
+
+Em todas, a expulsão (vermelho direto ou segundo amarelo) suspende o jogo seguinte, e os
+amarelos do jogo da expulsão não entram na conta. Quando os amarelos zeram, a suspensão
+que já foi gerada continua valendo (menos na Liga das Nações).
 ```json
-{ "team_id": 1769, "league": "BSA", "season": "2026", "yellows_for_suspension": 3,
+{ "team_id": 1769, "league": "BSA", "season": "2026",
+  "rule": "3º, 6º, 9º... amarelo: 1 jogo", "yellows_for_suspension": 3,
   "matches_counted": 31, "matches_without_data": 0,
-  "next_match": { "match_id": 4890, "date": "2026-10-24T21:30:00Z", "opponent": "RB Bragantino", "home": true },
+  "next_match": { "match_id": 4890, "date": "2026-10-24T21:30:00Z", "opponent": "RB Bragantino",
+                  "home": true, "stage": "REGULAR_SEASON" },
   "suspended": [ { "name": "Joaquín Piquerez", "espn_player_id": 237064, "yellow_cards": 3,
-                   "red_cards": 0, "status": "suspended", "reason": "3º amarelo" } ],
-  "hanging":   [ { "name": "Jhon Arias", "yellow_cards": 5, "red_cards": 0, "status": "hanging" } ],
+                   "total_yellow_cards": 3, "red_cards": 0, "status": "suspended",
+                   "reason": "3º amarelo", "matches_banned": 1 } ],
+  "hanging":   [ { "name": "Jhon Arias", "yellow_cards": 5, "total_yellow_cards": 5,
+                   "red_cards": 0, "status": "hanging", "ban_if_booked": 1 } ],
   "players":   [ ... todos com cartão, mais amarelos primeiro ... ] }
 ```
-- `suspended`: fora do próximo jogo (`next_match`), com o motivo. `hanging`: pendurados (o
-  próximo amarelo suspende). `players`: todos os que levaram cartão na competição.
-- `yellow_cards` conta só os amarelos que valem para o acúmulo.
+- `suspended`: fora do próximo jogo (`next_match`), com o motivo (`"3º amarelo"`,
+  `"segundo amarelo"` ou `"cartão vermelho"`) e `matches_banned`, os jogos que ainda vai
+  cumprir (a Premier League dá 2 jogos no 10º amarelo). `may_be_longer: true` no vermelho
+  direto: a suspensão automática é de 1 jogo, mas o tribunal costuma dar mais (na
+  Inglaterra, 3 jogos por jogada violenta), e isso não aparece nos dados. Mostre "pode
+  pegar mais jogos".
+- `hanging`: pendurados, com `ban_if_booked`, os jogos de suspensão se levar o próximo
+  amarelo. Já considera o zeramento: quem tem 2 amarelos na Libertadores não é pendurado
+  na semifinal.
+- `yellow_cards`: os amarelos que contam para a suspensão (desde o último zeramento);
+  `total_yellow_cards`: todos na competição.
+- `rule`: a regra, em texto, para mostrar. `note`, quando vem, é um limite dos dados para
+  avisar: na Premier League, os amarelos das copas inglesas também contam e não estão no
+  app; na Copa do Brasil, a regra é a da edição de 2025, e as primeiras fases não têm os
+  lances da ESPN.
 - `matches_without_data`: jogos encerrados sem os lances da ESPN; os cartões deles ficam de
   fora. Se não for 0, avise que a lista pode estar incompleta.
-- Não cobre gancho do STJD (suspensão de mais de um jogo), que não aparece nos dados da ESPN.
-- Conferido com o noticiário de 24/10/2026: Palmeiras sem Andreas Pereira (vermelho) e
-  Piquerez (3º amarelo), Bragantino sem Ramires (3º amarelo).
-- Cache de 5 min.
+- Conferido com o noticiário de outubro de 2026: Palmeiras sem Andreas Pereira e Piquerez,
+  Bragantino sem Ramires; na Premier League, Janelt suspenso (segundo amarelo, com 4
+  amarelos que contam) e Crooks e Thiago pendurados.
+- Competição sem regra cadastrada dá 404. Cache de 5 min.
 
 ### `GET /matches/live`: relógio e pênaltis ao vivo
 

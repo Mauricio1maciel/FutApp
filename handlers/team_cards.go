@@ -19,7 +19,7 @@ func TeamCardsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !services.HasCardRule(league) {
-		utils.WriteError(w, http.StatusNotFound, "A regra de cartões desta competição ainda não está cadastrada (por enquanto, Séries A e B)")
+		utils.WriteError(w, http.StatusNotFound, "A regra de cartões desta competição não está cadastrada")
 		return
 	}
 	season := services.ResolveSeason(r.Context(), league, q.Get("season"))

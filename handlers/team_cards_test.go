@@ -11,7 +11,7 @@ func TestTeamCardsParametros(t *testing.T) {
 		"":                   400,
 		"id=abc&league=BSA":  400,
 		"id=1783":            400,
-		"id=1783&league=CLI": 404, // regra de cartões ainda não cadastrada
+		"id=1783&league=XYZ": 404, // competição sem regra de cartões
 	} {
 		rec := httptest.NewRecorder()
 		TeamCardsHandler(rec, httptest.NewRequest(http.MethodGet, "/team/cards?"+query, nil))

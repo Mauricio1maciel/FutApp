@@ -13,7 +13,8 @@ type CardMatch struct {
 	MatchID  int64
 	Date     time.Time
 	Opponent string
-	HasData  bool // a ESPN tem os lances do jogo (sem eles, os cartões não entram na conta)
+	Stage    string // fase (ex: GROUP_STAGE, QUARTER_FINALS): há competição que zera os amarelos numa fase
+	HasData  bool   // a ESPN tem os lances do jogo (sem eles, os cartões não entram na conta)
 	Cards    []CardEvent
 }
 
@@ -29,6 +30,7 @@ type NextMatch struct {
 	Date     time.Time `json:"date"`
 	Opponent string    `json:"opponent"`
 	Home     bool      `json:"home"`
+	Stage    string    `json:"stage"`
 }
 
 // GetTeamCards devolve os jogos encerrados do time na competição, em ordem, com os cartões
@@ -54,7 +56,7 @@ func teamCardMatches(ctx context.Context, league, season string, teamID int64) (
 
 	rows, err := DB.QueryContext(ctx, `
         WITH jogos AS (
-            SELECT m.id, m.match_date,
+            SELECT m.id, m.match_date, COALESCE(m.stage, '') AS stage,
                    CASE WHEN m.api_home_team_id = $3 THEN m.api_away_team_id ELSE m.api_home_team_id END AS opponent_id,
                    e.espn_match_id
             FROM matches m
@@ -76,7 +78,7 @@ func teamCardMatches(ctx context.Context, league, season string, teamID int64) (
             WHERE m.league = $1 AND m.season = $2 AND m.status = 'FINISHED'
               AND $3 IN (m.api_home_team_id, m.api_away_team_id)
         )
-        SELECT j.id, j.match_date AT TIME ZONE 'UTC', COALESCE(op.name, ''),
+        SELECT j.id, j.match_date AT TIME ZONE 'UTC', COALESCE(op.name, ''), j.stage,
                EXISTS (SELECT 1 FROM espn_match_events x WHERE x.espn_match_id = j.espn_match_id),
                c.player_name, c.event_type, c.player_id
         FROM jogos j
@@ -104,15 +106,15 @@ func teamCardMatches(ctx context.Context, league, season string, teamID int64) (
 	for rows.Next() {
 		var id int64
 		var date time.Time
-		var opponent string
+		var opponent, stage string
 		var hasData bool
 		var player, kind sql.NullString
 		var playerID sql.NullInt64
-		if err := rows.Scan(&id, &date, &opponent, &hasData, &player, &kind, &playerID); err != nil {
+		if err := rows.Scan(&id, &date, &opponent, &stage, &hasData, &player, &kind, &playerID); err != nil {
 			return nil, err
 		}
 		if len(matches) == 0 || matches[len(matches)-1].MatchID != id {
-			matches = append(matches, CardMatch{MatchID: id, Date: date, Opponent: opponent, HasData: hasData})
+			matches = append(matches, CardMatch{MatchID: id, Date: date, Opponent: opponent, Stage: stage, HasData: hasData})
 		}
 		if player.Valid {
 			last := &matches[len(matches)-1]
@@ -129,14 +131,15 @@ func teamNextMatch(ctx context.Context, league, season string, teamID int64) (*N
 	// Jogo adiado sem data nova fica de fora: ele tem a data antiga e passaria na frente
 	var n NextMatch
 	err := DB.QueryRowContext(ctx, `
-        SELECT m.id, m.match_date AT TIME ZONE 'UTC', COALESCE(op.name, ''), m.api_home_team_id = $3
+        SELECT m.id, m.match_date AT TIME ZONE 'UTC', COALESCE(op.name, ''), m.api_home_team_id = $3,
+               COALESCE(m.stage, '')
         FROM matches m
         LEFT JOIN teams op ON op.api_id = CASE WHEN m.api_home_team_id = $3 THEN m.api_away_team_id ELSE m.api_home_team_id END
         WHERE m.league = $1 AND m.season = $2 AND $3 IN (m.api_home_team_id, m.api_away_team_id)
           AND m.status IN ('SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED')
           AND m.match_date > (now() AT TIME ZONE 'UTC') - INTERVAL '4 hours'
         ORDER BY m.match_date
-        LIMIT 1`, league, season, teamID).Scan(&n.MatchID, &n.Date, &n.Opponent, &n.Home)
+        LIMIT 1`, league, season, teamID).Scan(&n.MatchID, &n.Date, &n.Opponent, &n.Home, &n.Stage)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
