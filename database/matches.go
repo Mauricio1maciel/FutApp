@@ -148,9 +148,9 @@ const fdBehindESPN = `(matches.status IN ('IN_PLAY', 'PAUSED') AND EXCLUDED.stat
                         AND e.espn_home_team_id = th.espn_team_id AND e.espn_away_team_id = ta.espn_team_id
                         AND e.match_date::date = matches.match_date::date AND e.status = 'in'))`
 
-// fdKeepsOurs: nos dois casos acima, fica o que já temos (placar, pênaltis, situação e
-// vencedor)
-const fdKeepsOurs = `(` + fdRegresses + ` OR ` + fdBehindESPN + `)`
+// fdKeepsOurs: nos dois casos acima, e com o resultado travado (W.O., decisão do tribunal:
+// migration 032), fica o que já temos (placar, pênaltis, situação e vencedor)
+const fdKeepsOurs = `(matches.result_locked OR ` + fdRegresses + ` OR ` + fdBehindESPN + `)`
 
 // matchUpsertConflict é o que acontece quando o jogo já existe, igual para um jogo
 // (SaveMatch) e para a liga inteira (SaveMatches). O WHERE pula a gravação quando nada

@@ -175,3 +175,22 @@ func TestESPNPenaltisParciaisSaoSubstituidos(t *testing.T) {
 		t.Errorf("esperado encerrado, pênaltis 2 x 3 e vitória do visitante, veio %+v", e)
 	}
 }
+
+// Resultado travado (W.O.): a football-data dizendo "cancelado" não desfaz o 0 x 3
+func TestSaveMatchRespeitaResultadoTravado(t *testing.T) {
+	openTestDB(t)
+	ctx := context.Background()
+	const id = 7771401
+	data := "2026-05-08T00:30:00Z"
+	if err := SaveMatch(ctx, id, tstLeague, "2026", 4, tstHome, tstAway, 0, 0, nil, nil, data, "CANCELLED", "GROUP_STAGE", "GROUP_A", ""); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, `UPDATE matches SET status = 'FINISHED', home_score = 0, away_score = 3, winner = 'AWAY_TEAM',
+                 result_locked = true WHERE league = $1 AND id_event = $2`, tstLeague, id)
+	if err := SaveMatch(ctx, id, tstLeague, "2026", 4, tstHome, tstAway, 0, 0, nil, nil, data, "CANCELLED", "GROUP_STAGE", "GROUP_A", ""); err != nil {
+		t.Fatal(err)
+	}
+	if e := lerJogo(t, id); e.status != "FINISHED" || e.fora != 3 || e.vencedor != "AWAY_TEAM" {
+		t.Errorf("o W.O. travado foi desfeito pela football-data: %+v", e)
+	}
+}

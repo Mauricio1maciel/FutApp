@@ -94,6 +94,19 @@ jogos encerrados nas últimas 12 horas (log: `Vídeos novos em N jogo(s)`).
 A narração fica em `espn_matches.commentary` por 30 dias e os vídeos, em
 `espn_matches.videos`, por 90; a rotina das 03:00 apaga os mais antigos.
 
+## Resultado decidido fora de campo (W.O.)
+
+Quando o tribunal decide um jogo (W.O., placar atribuído), a football-data às vezes continua
+com "cancelado" e regravaria isso a cada volta. Trave o resultado (SQL Editor do Supabase):
+```sql
+UPDATE matches SET status = 'FINISHED', home_score = 0, away_score = 3,
+       winner = 'AWAY_TEAM', result_locked = true
+WHERE id = <id do jogo>;
+```
+Com `result_locked`, a gravação da football-data não mexe no placar, na situação nem no
+vencedor. A classificação conta o jogo no próximo recálculo. Primeiro caso: Medellín x
+Flamengo, Libertadores 2026 (migration 032).
+
 ## Aviso de jogo sem resultado
 
 A cada 30 minutos (a primeira volta, 10 minutos depois de o worker subir), o worker
