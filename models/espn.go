@@ -78,6 +78,9 @@ type AppLiveMatch struct {
 	Period       int    `json:"period"`
 	ClockRunning bool   `json:"clock_running"`
 	ClockAt      string `json:"clock_at,omitempty"`
+	// O relógio foi estimado pelo horário de início: a ESPN mandou o jogo rolando com o
+	// relógio zerado (acontece quando o placar ao vivo dela trava)
+	ClockEstimated bool `json:"clock_estimated,omitempty"`
 
 	// Disputa de pênaltis, parcial durante a disputa (nil = não houve)
 	HomePenalty *int `json:"home_penalty,omitempty"`

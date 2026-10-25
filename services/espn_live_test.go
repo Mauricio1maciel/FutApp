@@ -54,3 +54,24 @@ func TestLiveMatchesFromScoreboardRelogio(t *testing.T) {
 		t.Errorf("jogo que não começou: relógio parado, veio %+v", jogos[3])
 	}
 }
+
+// A ESPN às vezes manda o jogo rolando com o relógio zerado: estima pelo início
+func TestRelogioEstimadoQuandoAESPNTrava(t *testing.T) {
+	inicio := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	if s, ok := estimateClock("2026-10-25T00:00Z", 1, inicio.Add(26*time.Minute)); !ok || s != 26*60 {
+		t.Errorf("1º tempo, 26 min depois do início: esperado 26', veio %d s", s)
+	}
+	if s, _ := estimateClock("2026-10-25T00:00Z", 2, inicio.Add(80*time.Minute)); s != 65*60 {
+		t.Errorf("2º tempo, 80 min depois do início (15 de intervalo): esperado 65', veio %d s", s)
+	}
+	if s, _ := estimateClock("2026-10-25T00:00Z", 1, inicio.Add(70*time.Minute)); s != 50*60 {
+		t.Errorf("1º tempo não passa de 45+5: veio %d s", s)
+	}
+	var data models.ESPNScoreboard
+	json.Unmarshal([]byte(`{"events": [{"id": "9", "date": "2026-10-25T00:00Z", "competitions": [{"status": {"clock": 0, "displayClock": "0'", "period": 1,
+	  "type": {"name": "STATUS_FIRST_HALF", "state": "in"}}, "competitors": []}]}]}`), &data)
+	m := liveMatchesFromScoreboard(data, inicio.Add(26*time.Minute))[0]
+	if !m.ClockEstimated || m.ClockSeconds != 26*60 || m.Clock != "26'" || !m.ClockRunning {
+		t.Errorf("relógio zerado com o jogo rolando: esperado 26' estimado, veio %+v", m)
+	}
+}

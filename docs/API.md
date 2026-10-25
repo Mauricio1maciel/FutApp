@@ -432,6 +432,10 @@ relógio andar sozinho entre uma atualização e outra:
   baixo. Passou de 45 no 1º tempo, de 90 no 2º, de 105 e de 120 na prorrogação? Mostre os
   acréscimos: "45+2'", "90+4'". A ESPN atualiza o relógio de minuto em minuto: a próxima
   resposta corrige o que o app contou.
+- `clock_estimated: true`: a ESPN mandou o jogo rolando com o relógio zerado (o placar ao
+  vivo dela às vezes trava) e o minuto foi estimado pelo horário marcado do início (com 15
+  minutos de intervalo). Pode ficar alguns minutos adiantado, se o jogo começou atrasado:
+  mostre com um "~" (ex: "~32'").
 - `home_penalty`/`away_penalty`: o placar da disputa de pênaltis, parcial durante a
   disputa; só vêm quando houve disputa.
 

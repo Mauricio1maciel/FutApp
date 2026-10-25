@@ -85,6 +85,12 @@ func liveMatchesFromScoreboard(data models.ESPNScoreboard, fetchedAt time.Time) 
 			ClockAt:      fetchedAt.UTC().Format(time.RFC3339),
 		}
 
+		if match.State == "in" && match.ClockSeconds == 0 && match.Period >= 1 && match.Period <= 2 {
+			if secs, ok := estimateClock(event.Date, match.Period, fetchedAt); ok {
+				match.ClockSeconds, match.ClockEstimated = secs, true
+				match.Clock = fmt.Sprintf("%d'", secs/60)
+			}
+		}
 		if match.Clock == "" || match.Clock == "0'" {
 			match.Clock = comp.Status.Type.State
 		}
@@ -109,6 +115,27 @@ func liveMatchesFromScoreboard(data models.ESPNScoreboard, fetchedAt time.Time) 
 	}
 
 	return liveMatches
+}
+
+// estimateClock estima os segundos de jogo pelo horário de início, quando a ESPN manda o
+// jogo rolando com o relógio zerado: no 2º tempo, desconta 15 minutos de intervalo. O
+// resultado fica dentro do tempo (até 45+5 no 1º tempo; de 45 a 90+10 no 2º)
+func estimateClock(kickoff string, period int, now time.Time) (int, bool) {
+	var start time.Time
+	var err error
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04Z"} {
+		if start, err = time.Parse(layout, kickoff); err == nil {
+			break
+		}
+	}
+	if err != nil || now.Before(start) {
+		return 0, false
+	}
+	secs := int(now.Sub(start).Seconds())
+	if period == 1 {
+		return min(secs, 50*60), true
+	}
+	return min(max(secs-15*60, 45*60), 100*60), true
 }
 
 // clockRunning: o relógio só anda com a bola rolando. No intervalo, entre o tempo normal e
