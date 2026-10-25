@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -187,78 +188,84 @@ func kindsArray(kinds []string) interface{} {
 	return pq.Array(kinds)
 }
 
-// As funções Subscribe* seguem um jogo, time ou liga. setKinds = false mantém os tipos de
-// aviso que a inscrição já tinha (ou todos, se é nova); setKinds = true grava kinds
-// (nil = todos).
-func SubscribeMatch(ctx context.Context, deviceID string, matchID int64, kinds []string, setKinds bool) error {
+// Owner é o dono de uma inscrição: um aparelho (convidado) ou uma conta. O que a conta
+// segue vale em todos os aparelhos logados nela
+type Owner struct {
+	DeviceID string
+	UserID   int64
+}
+
+func Device(deviceID string) Owner { return Owner{DeviceID: deviceID} }
+func User(userID int64) Owner      { return Owner{UserID: userID} }
+
+// column e value: a coluna e o valor do dono nas tabelas de inscrição
+func (o Owner) column() string {
+	if o.UserID != 0 {
+		return "user_id"
+	}
+	return "device_id"
+}
+
+func (o Owner) value() interface{} {
+	if o.UserID != 0 {
+		return o.UserID
+	}
+	return o.DeviceID
+}
+
+// subscribe segue um alvo (jogo, time ou liga). setKinds = false mantém os tipos de aviso
+// que a inscrição já tinha (ou todos, se é nova); setKinds = true grava kinds (nil = todos)
+func subscribe(ctx context.Context, table, target string, owner Owner, value interface{}, kinds []string, setKinds bool) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	_, err := DB.ExecContext(ctx, `
-        INSERT INTO match_subscriptions (device_id, match_id, kinds)
+	col := owner.column()
+	_, err := DB.ExecContext(ctx, fmt.Sprintf(`
+        INSERT INTO %[1]s (%[2]s, %[3]s, kinds)
         VALUES ($1, $2, CASE WHEN $4 THEN $3::text[] END)
-        ON CONFLICT (device_id, match_id) DO UPDATE
-        SET kinds = CASE WHEN $4 THEN EXCLUDED.kinds ELSE match_subscriptions.kinds END`,
-		deviceID, matchID, kindsArray(kinds), setKinds)
-	return subscriptionError(err, "match_subscriptions_device_fkey")
+        ON CONFLICT (%[2]s, %[3]s) DO UPDATE
+        SET kinds = CASE WHEN $4 THEN EXCLUDED.kinds ELSE %[1]s.kinds END`, table, col, target),
+		owner.value(), value, kindsArray(kinds), setKinds)
+	return subscriptionError(err, table+"_device_fkey")
+}
+
+func unsubscribe(ctx context.Context, table, target string, owner Owner, value interface{}) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	_, err := DB.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE %s = $1 AND %s = $2`, table, owner.column(), target),
+		owner.value(), value)
+	return err
+}
+
+// SubscribeMatch passa a seguir um jogo (repetir não dá erro)
+func SubscribeMatch(ctx context.Context, owner Owner, matchID int64, kinds []string, setKinds bool) error {
+	return subscribe(ctx, "match_subscriptions", "match_id", owner, matchID, kinds, setKinds)
 }
 
 // UnsubscribeMatch deixa de seguir um jogo
-func UnsubscribeMatch(ctx context.Context, deviceID string, matchID int64) error {
-	ctx, cancel := withTimeout(ctx)
-	defer cancel()
-
-	_, err := DB.ExecContext(ctx,
-		`DELETE FROM match_subscriptions WHERE device_id = $1 AND match_id = $2`, deviceID, matchID)
-	return err
+func UnsubscribeMatch(ctx context.Context, owner Owner, matchID int64) error {
+	return unsubscribe(ctx, "match_subscriptions", "match_id", owner, matchID)
 }
 
 // SubscribeTeam passa a seguir todos os jogos de um time (repetir não dá erro)
-func SubscribeTeam(ctx context.Context, deviceID string, teamID int64, kinds []string, setKinds bool) error {
-	ctx, cancel := withTimeout(ctx)
-	defer cancel()
-
-	_, err := DB.ExecContext(ctx, `
-        INSERT INTO team_subscriptions (device_id, team_api_id, kinds)
-        VALUES ($1, $2, CASE WHEN $4 THEN $3::text[] END)
-        ON CONFLICT (device_id, team_api_id) DO UPDATE
-        SET kinds = CASE WHEN $4 THEN EXCLUDED.kinds ELSE team_subscriptions.kinds END`,
-		deviceID, teamID, kindsArray(kinds), setKinds)
-	return subscriptionError(err, "team_subscriptions_device_fkey")
+func SubscribeTeam(ctx context.Context, owner Owner, teamID int64, kinds []string, setKinds bool) error {
+	return subscribe(ctx, "team_subscriptions", "team_api_id", owner, teamID, kinds, setKinds)
 }
 
 // UnsubscribeTeam deixa de seguir um time
-func UnsubscribeTeam(ctx context.Context, deviceID string, teamID int64) error {
-	ctx, cancel := withTimeout(ctx)
-	defer cancel()
-
-	_, err := DB.ExecContext(ctx,
-		`DELETE FROM team_subscriptions WHERE device_id = $1 AND team_api_id = $2`, deviceID, teamID)
-	return err
+func UnsubscribeTeam(ctx context.Context, owner Owner, teamID int64) error {
+	return unsubscribe(ctx, "team_subscriptions", "team_api_id", owner, teamID)
 }
 
 // SubscribeLeague passa a seguir todos os jogos de uma liga (repetir não dá erro)
-func SubscribeLeague(ctx context.Context, deviceID string, league string, kinds []string, setKinds bool) error {
-	ctx, cancel := withTimeout(ctx)
-	defer cancel()
-
-	_, err := DB.ExecContext(ctx, `
-        INSERT INTO league_subscriptions (device_id, league, kinds)
-        VALUES ($1, $2, CASE WHEN $4 THEN $3::text[] END)
-        ON CONFLICT (device_id, league) DO UPDATE
-        SET kinds = CASE WHEN $4 THEN EXCLUDED.kinds ELSE league_subscriptions.kinds END`,
-		deviceID, league, kindsArray(kinds), setKinds)
-	return subscriptionError(err, "league_subscriptions_device_fkey")
+func SubscribeLeague(ctx context.Context, owner Owner, league string, kinds []string, setKinds bool) error {
+	return subscribe(ctx, "league_subscriptions", "league", owner, league, kinds, setKinds)
 }
 
 // UnsubscribeLeague deixa de seguir uma liga
-func UnsubscribeLeague(ctx context.Context, deviceID string, league string) error {
-	ctx, cancel := withTimeout(ctx)
-	defer cancel()
-
-	_, err := DB.ExecContext(ctx,
-		`DELETE FROM league_subscriptions WHERE device_id = $1 AND league = $2`, deviceID, league)
-	return err
+func UnsubscribeLeague(ctx context.Context, owner Owner, league string) error {
+	return unsubscribe(ctx, "league_subscriptions", "league", owner, league)
 }
 
 // subscriptionError traduz a violação de chave estrangeira: ou o aparelho não foi
@@ -274,7 +281,7 @@ func subscriptionError(err error, deviceConstraint string) error {
 	return err
 }
 
-// PushSubscriptions é tudo o que um aparelho segue
+// PushSubscriptions é tudo o que um aparelho (ou uma conta) segue
 type PushSubscriptions struct {
 	Matches []int64  `json:"matches"`
 	Teams   []int64  `json:"teams"`
@@ -290,7 +297,7 @@ type SubscriptionKinds struct {
 	Leagues map[string][]string `json:"leagues"`
 }
 
-func GetPushSubscriptions(ctx context.Context, deviceID string) (PushSubscriptions, error) {
+func GetPushSubscriptions(ctx context.Context, owner Owner) (PushSubscriptions, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
@@ -306,15 +313,15 @@ func GetPushSubscriptions(ctx context.Context, deviceID string) (PushSubscriptio
 		add   func(key string)
 		kinds map[string][]string
 	}{
-		{`SELECT match_id::text, kinds FROM match_subscriptions WHERE device_id = $1 ORDER BY match_id`,
+		{`SELECT match_id::text, kinds FROM match_subscriptions WHERE ` + owner.column() + ` = $1 ORDER BY match_id`,
 			func(k string) { subs.Matches = append(subs.Matches, parseID(k)) }, subs.Kinds.Matches},
-		{`SELECT team_api_id::text, kinds FROM team_subscriptions WHERE device_id = $1 ORDER BY team_api_id`,
+		{`SELECT team_api_id::text, kinds FROM team_subscriptions WHERE ` + owner.column() + ` = $1 ORDER BY team_api_id`,
 			func(k string) { subs.Teams = append(subs.Teams, parseID(k)) }, subs.Kinds.Teams},
-		{`SELECT league, kinds FROM league_subscriptions WHERE device_id = $1 ORDER BY league`,
+		{`SELECT league, kinds FROM league_subscriptions WHERE ` + owner.column() + ` = $1 ORDER BY league`,
 			func(k string) { subs.Leagues = append(subs.Leagues, k) }, subs.Kinds.Leagues},
 	}
 	for _, q := range queries {
-		rows, err := DB.QueryContext(ctx, q.query, deviceID)
+		rows, err := DB.QueryContext(ctx, q.query, owner.value())
 		if err != nil {
 			return subs, err
 		}
@@ -378,22 +385,23 @@ func GetPushTargetsForMatch(ctx context.Context, matchID int64, kind string) ([]
 	rows, err := DB.QueryContext(ctx, `
         SELECT DISTINCT `+pushTargetColumns+`
         FROM push_devices d
-        WHERE d.device_id IN (
-            -- Quem segue por mais de um caminho recebe se qualquer um pedir esse tipo
-            SELECT device_id FROM match_subscriptions
+        JOIN (
+            -- Quem segue por mais de um caminho recebe se qualquer um pedir esse tipo. A
+            -- inscrição é de um aparelho (convidado) ou de uma conta (todos os aparelhos dela)
+            SELECT device_id, user_id FROM match_subscriptions
             WHERE match_id = $1 AND (kinds IS NULL OR $2 = ANY(kinds))
             UNION
-            SELECT ts.device_id
+            SELECT ts.device_id, ts.user_id
             FROM team_subscriptions ts
             JOIN matches m ON m.id = $1
             WHERE ts.team_api_id IN (m.api_home_team_id, m.api_away_team_id)
               AND (ts.kinds IS NULL OR $2 = ANY(ts.kinds))
             UNION
-            SELECT ls.device_id
+            SELECT ls.device_id, ls.user_id
             FROM league_subscriptions ls
             JOIN matches m ON m.id = $1 AND m.league = ls.league
             WHERE ls.kinds IS NULL OR $2 = ANY(ls.kinds)
-        )`, matchID, kind)
+        ) s ON s.device_id = d.device_id OR s.user_id = d.user_id`, matchID, kind)
 	if err != nil {
 		return nil, err
 	}

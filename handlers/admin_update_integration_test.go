@@ -16,7 +16,7 @@ import (
 func TestAtualizacaoDoAdminEmSegundoPlano(t *testing.T) {
 	database.DB = testutil.OpenDB(t, "matches")
 	t.Setenv("JWT_SECRET", "segredo-de-teste")
-	admin, _ := utils.GenerateUserToken(1, models.RoleAdmin)
+	admin, _ := utils.GenerateUserToken(1, models.RoleAdmin, "")
 	guest, _ := utils.GenerateToken("teste-update")
 
 	iniciou := make(chan string, 4)

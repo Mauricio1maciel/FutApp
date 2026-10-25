@@ -116,7 +116,7 @@ func TestPushJogoCompleto(t *testing.T) {
 	ctx := context.Background()
 	m := newTestMatch(t, 7770001, 0, "TIMED", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	if err := SubscribeMatch(ctx, "teste-push-1", m, nil, false); err != nil {
+	if err := SubscribeMatch(ctx, Device("teste-push-1"), m, nil, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -141,8 +141,8 @@ func TestPushGolAnulado(t *testing.T) {
 	m := newTestMatch(t, 7770014, 0, "TIMED", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
 	newTestDevice(t, "teste-push-2", "ExponentPushToken[t2]")
-	SubscribeMatch(ctx, "teste-push-1", m, nil, false)
-	SubscribeMatch(ctx, "teste-push-2", m, []string{"end"}, true)
+	SubscribeMatch(ctx, Device("teste-push-1"), m, nil, false)
+	SubscribeMatch(ctx, Device("teste-push-2"), m, []string{"end"}, true)
 
 	setScore(t, m, "IN_PLAY", 1, 0) // gol da casa
 	setScore(t, m, "IN_PLAY", 0, 0) // o VAR anula
@@ -191,7 +191,7 @@ func TestPushGolAnuladoPerdeOSentidoNoFim(t *testing.T) {
 	openTestDB(t)
 	m := newTestMatch(t, 7770015, 0, "TIMED", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	SubscribeMatch(context.Background(), "teste-push-1", m, nil, false)
+	SubscribeMatch(context.Background(), Device("teste-push-1"), m, nil, false)
 
 	setScore(t, m, "IN_PLAY", 1, 0)
 	setScore(t, m, "IN_PLAY", 0, 0)  // o VAR anula nos acréscimos
@@ -210,7 +210,7 @@ func TestPushSeguindoTime(t *testing.T) {
 	openTestDB(t)
 	m := newTestMatch(t, 7770003, 0, "TIMED", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	if err := SubscribeTeam(context.Background(), "teste-push-1", tstAway, nil, false); err != nil {
+	if err := SubscribeTeam(context.Background(), Device("teste-push-1"), tstAway, nil, false); err != nil {
 		t.Fatal(err)
 	}
 	setScore(t, m, "IN_PLAY", 0, 1)
@@ -222,10 +222,10 @@ func TestPushSeguindoLiga(t *testing.T) {
 	ctx := context.Background()
 	m := newTestMatch(t, 7770013, 0, "TIMED", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	if err := SubscribeLeague(ctx, "teste-push-1", tstLeague, nil, false); err != nil {
+	if err := SubscribeLeague(ctx, Device("teste-push-1"), tstLeague, nil, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := SubscribeLeague(ctx, "teste-push-1", "NAOEXISTE", nil, false); !errors.Is(err, ErrNotFound) {
+	if err := SubscribeLeague(ctx, Device("teste-push-1"), "NAOEXISTE", nil, false); !errors.Is(err, ErrNotFound) {
 		t.Errorf("liga inexistente: esperado ErrNotFound, veio %v", err)
 	}
 
@@ -233,16 +233,16 @@ func TestPushSeguindoLiga(t *testing.T) {
 	assertOutbox(t, m, "start 1-0", "goal home 1-0")
 
 	// Seguindo a liga e o time: recebe uma vez só
-	SubscribeTeam(ctx, "teste-push-1", tstHome, nil, false)
+	SubscribeTeam(ctx, Device("teste-push-1"), tstHome, nil, false)
 	if tokens, _ := GetPushTokensForMatch(ctx, m, "goal"); !reflect.DeepEqual(tokens, []string{"ExponentPushToken[t1]"}) {
 		t.Errorf("esperado 1 token, veio %v", tokens)
 	}
-	if subs, _ := GetPushSubscriptions(ctx, "teste-push-1"); !reflect.DeepEqual(subs.Leagues, []string{tstLeague}) {
+	if subs, _ := GetPushSubscriptions(ctx, Device("teste-push-1")); !reflect.DeepEqual(subs.Leagues, []string{tstLeague}) {
 		t.Errorf("ligas seguidas: veio %v", subs.Leagues)
 	}
 
-	UnsubscribeLeague(ctx, "teste-push-1", tstLeague)
-	UnsubscribeTeam(ctx, "teste-push-1", tstHome)
+	UnsubscribeLeague(ctx, Device("teste-push-1"), tstLeague)
+	UnsubscribeTeam(ctx, Device("teste-push-1"), tstHome)
 	if tokens, _ := GetPushTokensForMatch(ctx, m, "goal"); len(tokens) != 0 {
 		t.Errorf("depois de deixar de seguir, ninguém deveria receber: %v", tokens)
 	}
@@ -252,7 +252,7 @@ func TestPushJogoAntigoNaoAvisa(t *testing.T) {
 	openTestDB(t)
 	m := newTestMatch(t, 7770004, -48*time.Hour, "TIMED", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	SubscribeMatch(context.Background(), "teste-push-1", m, nil, false)
+	SubscribeMatch(context.Background(), Device("teste-push-1"), m, nil, false)
 
 	setScore(t, m, "FINISHED", 3, 2) // GetMissingMatches completando jogo de 2 dias atrás
 	assertOutbox(t, m)
@@ -262,7 +262,7 @@ func TestPushSoOPlacarFinalQuandoPerdeuOJogo(t *testing.T) {
 	openTestDB(t)
 	m := newTestMatch(t, 7770012, -2*time.Hour, "TIMED", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	SubscribeMatch(context.Background(), "teste-push-1", m, nil, false)
+	SubscribeMatch(context.Background(), Device("teste-push-1"), m, nil, false)
 
 	setScore(t, m, "FINISHED", 2, 1) // worker fora do ar durante o jogo
 	setScore(t, m, "FINISHED", 3, 1) // correção de placar depois do fim: nada de "gol"
@@ -273,7 +273,7 @@ func TestPushSeguiuNoMeioDoJogo(t *testing.T) {
 	openTestDB(t)
 	m := newTestMatch(t, 7770005, -30*time.Minute, "IN_PLAY", 1, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	SubscribeMatch(context.Background(), "teste-push-1", m, nil, false)
+	SubscribeMatch(context.Background(), Device("teste-push-1"), m, nil, false)
 
 	setScore(t, m, "IN_PLAY", 2, 0)
 	// Sem "começou" (já tinha começado) e só o gol novo
@@ -284,7 +284,7 @@ func TestPushFalhaNoAvisoNaoImpedePlacar(t *testing.T) {
 	openTestDB(t)
 	m := newTestMatch(t, 7770006, 0, "TIMED", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	SubscribeMatch(context.Background(), "teste-push-1", m, nil, false)
+	SubscribeMatch(context.Background(), Device("teste-push-1"), m, nil, false)
 
 	// Tudo numa transação desfeita no fim: faz a fila recusar qualquer aviso e confere
 	// que o placar continua sendo gravado
@@ -315,7 +315,7 @@ func TestPushEscalacaoUmaVez(t *testing.T) {
 	ctx := context.Background()
 	m := newTestMatch(t, 7770007, 30*time.Minute, "TIMED", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	SubscribeMatch(ctx, "teste-push-1", m, nil, false)
+	SubscribeMatch(ctx, Device("teste-push-1"), m, nil, false)
 
 	var kickoff time.Time
 	DB.QueryRow(`SELECT match_date FROM matches WHERE id = $1`, m).Scan(&kickoff)
@@ -348,7 +348,7 @@ func TestPushAutorDoGol(t *testing.T) {
 	mustExec(t, `INSERT INTO espn_match_events (espn_match_id, minute, event_type, espn_team_id, player_name)
                  VALUES (9990008, '23''', 'Goal - Header', $1, 'Pedro')`, tstESPNHome)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	SubscribeMatch(ctx, "teste-push-1", m, nil, false)
+	SubscribeMatch(ctx, Device("teste-push-1"), m, nil, false)
 
 	setScore(t, m, "IN_PLAY", 1, 0) // a ESPN já tem o gol: vai com o autor
 	setScore(t, m, "IN_PLAY", 2, 0) // a ESPN ainda não tem o 2º gol: sem autor
@@ -383,31 +383,31 @@ func TestPushInscricoes(t *testing.T) {
 	ctx := context.Background()
 	m := newTestMatch(t, 7770009, time.Hour, "TIMED", 0, 0)
 
-	if err := SubscribeMatch(ctx, "teste-push-sem-registro", m, nil, false); !errors.Is(err, ErrDeviceNotRegistered) {
+	if err := SubscribeMatch(ctx, Device("teste-push-sem-registro"), m, nil, false); !errors.Is(err, ErrDeviceNotRegistered) {
 		t.Errorf("seguir sem registrar: esperado ErrDeviceNotRegistered, veio %v", err)
 	}
 
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	if err := SubscribeMatch(ctx, "teste-push-1", 2147480000, nil, false); !errors.Is(err, ErrNotFound) {
+	if err := SubscribeMatch(ctx, Device("teste-push-1"), 2147480000, nil, false); !errors.Is(err, ErrNotFound) {
 		t.Errorf("jogo inexistente: esperado ErrNotFound, veio %v", err)
 	}
-	if err := SubscribeTeam(ctx, "teste-push-1", 2147480000, nil, false); !errors.Is(err, ErrNotFound) {
+	if err := SubscribeTeam(ctx, Device("teste-push-1"), 2147480000, nil, false); !errors.Is(err, ErrNotFound) {
 		t.Errorf("time inexistente: esperado ErrNotFound, veio %v", err)
 	}
 
 	// Segue o jogo e o time mandante: recebe uma vez só
-	SubscribeMatch(ctx, "teste-push-1", m, nil, false)
-	SubscribeMatch(ctx, "teste-push-1", m, nil, false) // repetir não dá erro
-	SubscribeTeam(ctx, "teste-push-1", tstHome, nil, false)
+	SubscribeMatch(ctx, Device("teste-push-1"), m, nil, false)
+	SubscribeMatch(ctx, Device("teste-push-1"), m, nil, false) // repetir não dá erro
+	SubscribeTeam(ctx, Device("teste-push-1"), tstHome, nil, false)
 	newTestDevice(t, "teste-push-2", "ExponentPushToken[t2]")
-	SubscribeTeam(ctx, "teste-push-2", tstAway, nil, false)
+	SubscribeTeam(ctx, Device("teste-push-2"), tstAway, nil, false)
 
 	tokens, _ := GetPushTokensForMatch(ctx, m, "goal")
 	if len(tokens) != 2 {
 		t.Errorf("esperado 2 aparelhos (sem repetir), veio %v", tokens)
 	}
 
-	subs, _ := GetPushSubscriptions(ctx, "teste-push-1")
+	subs, _ := GetPushSubscriptions(ctx, Device("teste-push-1"))
 	if !reflect.DeepEqual(subs.Matches, []int64{m}) || !reflect.DeepEqual(subs.Teams, []int64{tstHome}) ||
 		!reflect.DeepEqual(subs.Leagues, []string{}) {
 		t.Errorf("inscrições: veio %+v", subs)

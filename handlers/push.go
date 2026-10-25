@@ -41,10 +41,29 @@ func (f *flexID) UnmarshalJSON(b []byte) error {
 func pushDevice(w http.ResponseWriter, r *http.Request) (string, bool) {
 	device := middlewares.DeviceID(r)
 	if device == "" {
-		utils.WriteError(w, http.StatusBadRequest, "Use o token de convidado (com device_id) nas rotas /push")
+		utils.WriteError(w, http.StatusBadRequest, "Use um token com device_id (de convidado, ou da conta com device_id no login) nas rotas /push")
 		return "", false
 	}
 	return device, true
+}
+
+// subscriptionOwner: quem segue. Com conta, a conta (vale em todos os aparelhos dela); sem,
+// o aparelho do token de convidado
+func subscriptionOwner(w http.ResponseWriter, r *http.Request) (database.Owner, bool) {
+	if user := middlewares.UserID(r); user != 0 {
+		return database.User(user), true
+	}
+	device, ok := pushDevice(w, r)
+	return database.Device(device), ok
+}
+
+// linkDeviceToAccount liga o aparelho que acabou de registrar o push à conta do token
+func linkDeviceToAccount(r *http.Request, device string) {
+	if user := middlewares.UserID(r); user != 0 {
+		if err := database.SetDeviceUser(r.Context(), device, user); err != nil {
+			utils.CustomLog("PUSH", "Erro ao ligar o aparelho à conta %d: %v", user, err)
+		}
+	}
 }
 
 func decodeBody(r *http.Request, v interface{}) error {
@@ -92,6 +111,7 @@ func PushRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			utils.WriteError(w, http.StatusInternalServerError, "Erro ao registrar o aparelho")
 			return
 		}
+		linkDeviceToAccount(r, device)
 		utils.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 
 	case http.MethodDelete:
@@ -106,17 +126,17 @@ func PushRegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PushSubscriptionsHandler: GET lista o que o aparelho segue; POST passa a seguir um
+// PushSubscriptionsHandler: GET lista o que a conta (ou, sem conta, o aparelho) segue; POST passa a seguir um
 // jogo, um time ou uma liga; DELETE deixa de seguir
 func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
-	device, ok := pushDevice(w, r)
+	owner, ok := subscriptionOwner(w, r)
 	if !ok {
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		subs, err := database.GetPushSubscriptions(r.Context(), device)
+		subs, err := database.GetPushSubscriptions(r.Context(), owner)
 		if err != nil {
 			utils.WriteError(w, http.StatusInternalServerError, "Erro ao buscar o que você segue")
 			return
@@ -148,11 +168,11 @@ func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 		var err error
 		switch target.kind {
 		case "team":
-			err = database.SubscribeTeam(r.Context(), device, target.id, kinds, setKinds)
+			err = database.SubscribeTeam(r.Context(), owner, target.id, kinds, setKinds)
 		case "league":
-			err = database.SubscribeLeague(r.Context(), device, target.league, kinds, setKinds)
+			err = database.SubscribeLeague(r.Context(), owner, target.league, kinds, setKinds)
 		default:
-			err = database.SubscribeMatch(r.Context(), device, target.id, kinds, setKinds)
+			err = database.SubscribeMatch(r.Context(), owner, target.id, kinds, setKinds)
 		}
 		switch {
 		case errors.Is(err, database.ErrDeviceNotRegistered):
@@ -186,11 +206,11 @@ func PushSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 		var err error
 		switch target.kind {
 		case "team":
-			err = database.UnsubscribeTeam(r.Context(), device, target.id)
+			err = database.UnsubscribeTeam(r.Context(), owner, target.id)
 		case "league":
-			err = database.UnsubscribeLeague(r.Context(), device, target.league)
+			err = database.UnsubscribeLeague(r.Context(), owner, target.league)
 		default:
-			err = database.UnsubscribeMatch(r.Context(), device, target.id)
+			err = database.UnsubscribeMatch(r.Context(), owner, target.id)
 		}
 		if err != nil {
 			utils.WriteError(w, http.StatusInternalServerError, "Erro ao deixar de seguir")
@@ -406,6 +426,7 @@ func registerWebPush(w http.ResponseWriter, r *http.Request, device string, sub 
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao registrar o navegador")
 		return
 	}
+	linkDeviceToAccount(r, device)
 	utils.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

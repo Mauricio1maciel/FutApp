@@ -45,7 +45,7 @@ func TestProcessPushOutboxPontaAPonta(t *testing.T) {
 		if err := database.RegisterPushDevice(ctx, d.device, d.token, "android"); err != nil {
 			t.Fatal(err)
 		}
-		if err := database.SubscribeMatch(ctx, d.device, m, nil, false); err != nil {
+		if err := database.SubscribeMatch(ctx, database.Device(d.device), m, nil, false); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -53,7 +53,7 @@ func TestRotasPush(t *testing.T) {
           SELECT 9990021, 'TSH', '2026', match_date, 'pre', 883001, 883002 FROM matches WHERE id = $1`, m)
 
 	guest, _ := utils.GenerateToken("teste-rota-1")
-	admin, _ := utils.GenerateUserToken(1, models.RoleAdmin)
+	admin, _ := utils.GenerateUserToken(1, models.RoleAdmin, "")
 
 	register := middlewares.JWTAuth(PushRegisterHandler)
 	subs := middlewares.JWTAuth(PushSubscriptionsHandler)

@@ -64,7 +64,7 @@ func TestAvisoNoAppENoNavegador(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, d := range []string{"teste-web-app", "teste-web-site"} {
-		if err := database.SubscribeMatch(ctx, d, m, nil, false); err != nil {
+		if err := database.SubscribeMatch(ctx, database.Device(d), m, nil, false); err != nil {
 			t.Fatal(err)
 		}
 	}

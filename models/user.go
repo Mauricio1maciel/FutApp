@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 const (
 	RoleAdmin = "admin"
 	RoleUser  = "user"
@@ -11,4 +13,6 @@ type User struct {
 	Email        string
 	PasswordHash string
 	Role         string
+	DisplayName  string
+	CreatedAt    time.Time
 }

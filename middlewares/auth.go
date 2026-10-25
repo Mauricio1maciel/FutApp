@@ -55,9 +55,28 @@ func IsAdmin(r *http.Request) bool {
 	return claims.IsAdmin()
 }
 
-// DeviceID devolve o device_id do token de convidado ("" para token de admin, que não tem)
+// DeviceID devolve o aparelho do token ("" se o token não tem: admin que entrou sem device_id)
 func DeviceID(r *http.Request) string {
 	claims, _ := r.Context().Value(claimsKey).(*utils.Claims)
+	if claims == nil {
+		return ""
+	}
+	return claims.DeviceID
+}
+
+// UserID devolve a conta do token (0 para convidado)
+func UserID(r *http.Request) int64 {
+	claims, _ := r.Context().Value(claimsKey).(*utils.Claims)
+	if claims == nil {
+		return 0
+	}
+	return claims.UserID
+}
+
+// DeviceFromHeader devolve o aparelho do token do Authorization, nas rotas sem JWTAuth
+// ("" sem token ou com token inválido)
+func DeviceFromHeader(r *http.Request) string {
+	claims, _ := claimsFromHeader(r)
 	if claims == nil {
 		return ""
 	}

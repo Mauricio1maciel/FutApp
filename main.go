@@ -97,6 +97,11 @@ func main() {
 
 	mux.HandleFunc("/auth/guest", handlers.GuestAuthHandler)
 	mux.HandleFunc("/auth/login", handlers.LoginHandler)
+	// Contas: cadastro, renovar o token, sair e minha conta (ver e apagar)
+	mux.HandleFunc("/auth/register", handlers.RegisterHandler)
+	mux.HandleFunc("/auth/refresh", middlewares.JWTAuth(handlers.RefreshHandler))
+	mux.HandleFunc("/auth/logout", middlewares.JWTAuth(handlers.LogoutHandler))
+	mux.HandleFunc("/me", middlewares.JWTAuth(handlers.MeHandler))
 
 	// Rotas de leitura com cache curto na memória (middlewares/cache.go): jogos e
 	// detalhes do jogo por 20s (o worker atualiza a cada minuto), classificação e

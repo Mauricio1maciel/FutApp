@@ -85,7 +85,7 @@ minuto. Uso normal do app e do site não chega perto:
 
 | Rotas | Limite por endereço |
 |---|---|
-| `/auth/guest`, `/auth/login` | 20 por minuto (10 seguidos) |
+| `/auth/*` (convidado, login, cadastro) | 20 por minuto (10 seguidos) |
 | `/search`, `/player/stats`, `/team/stats`, `/h2h`, `/match/preview`, `/standings?live=true`, `/standings?view=...`, `/standings/chances` | 60 por minuto (30 seguidos) |
 | as demais (menos `/health`) | 240 por minuto (120 seguidos) |
 
@@ -128,7 +128,32 @@ Todas as rotas, menos `/auth/*`, exigem `Authorization: Bearer <token>`.
 | Rota | Body | Resposta 200 |
 |---|---|---|
 | `POST /auth/guest` | `{"device_id": "..."}` | `{"token", "type": "Bearer"}`, token de convidado de 30 dias |
-| `POST /auth/login` | `{"email", "password"}` | `{"token", "type": "Bearer", "role": "admin"}`, válido por 7 dias |
+| `POST /auth/register` | `{"email", "password", "display_name"?, "device_id"?}` | **201** `{"token", "type", "role": "user", "user"}`, válido por 30 dias |
+| `POST /auth/login` | `{"email", "password", "device_id"?}` | `{"token", "type", "role", "user"}`: 30 dias para usuário, 7 para admin |
+| `POST /auth/refresh` | (token da conta) | token novo, como no login |
+| `POST /auth/logout` | (token da conta) | **204**: o aparelho sai da conta e para de receber os avisos dela |
+| `GET /me` | (token da conta) | `{"id", "email", "display_name", "role", "created_at"}` |
+| `DELETE /me` | `{"password"}` | **204**: apaga a conta e tudo o que ela segue |
+
+`"user"` = `{"id", "email", "display_name", "role"}`.
+
+### Contas de usuário
+
+O que a conta segue (jogos, times, ligas e os tipos de aviso) fica salvo nela e vale em
+todos os aparelhos logados. As rotas `/push/*` não mudam: com o token da conta, leem e
+gravam as inscrições da conta; com o de convidado, as do aparelho.
+
+- **Ligar o aparelho:** no cadastro e no login, mande o `device_id` **e** o token de
+  convidado desse aparelho no `Authorization`. O que ele seguia como convidado passa para
+  a conta (somando ao que a conta já seguia) e ele passa a receber os avisos dela. Sem o
+  token do próprio aparelho: **403**.
+- Cadastro: e-mail válido (guardado em minúsculas), senha de 8 a 72 caracteres, nome de até
+  60. E-mail já usado: **409**.
+- Login errado: **401**. `DELETE /me` com senha errada: **401**.
+- Renove com `/auth/refresh` ao abrir o app (o token vale 30 dias). Token de conta apagada
+  dá **401** em `/me` e `/auth/refresh`: volte ao token de convidado.
+- Ao sair (`/auth/logout`), volte a usar o token de convidado: o aparelho começa sem nada
+  seguido (o que era seguido ficou na conta).
 
 - Se o token de admin der **401** em qualquer rota, ele expirou: apague-o e volte ao token de convidado.
 - O token de admin funciona em todas as rotas.

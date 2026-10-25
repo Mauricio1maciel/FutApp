@@ -34,8 +34,8 @@ func TestPushTiposDeAviso(t *testing.T) {
 	both := []string{"ExponentPushToken[t1]", "ExponentPushToken[t2]"}
 	only2 := []string{"ExponentPushToken[t2]"}
 
-	must(SubscribeTeam(ctx, "teste-push-1", tstHome, []string{"goal", "end"}, true)) // só gols e fim
-	must(SubscribeLeague(ctx, "teste-push-2", tstLeague, nil, false))                // tudo
+	must(SubscribeTeam(ctx, Device("teste-push-1"), tstHome, []string{"goal", "end"}, true)) // só gols e fim
+	must(SubscribeLeague(ctx, Device("teste-push-2"), tstLeague, nil, false))                // tudo
 	if got := tokens("goal"); !reflect.DeepEqual(got, both) {
 		t.Errorf("gol: esperado os dois, veio %v", got)
 	}
@@ -44,18 +44,18 @@ func TestPushTiposDeAviso(t *testing.T) {
 	}
 
 	// O app segue de novo sem mandar tipos (ex: ao abrir): a escolha fica
-	must(SubscribeTeam(ctx, "teste-push-1", tstHome, nil, false))
+	must(SubscribeTeam(ctx, Device("teste-push-1"), tstHome, nil, false))
 	if got := tokens("start"); !reflect.DeepEqual(got, only2) {
 		t.Errorf("seguir de novo sem tipos não pode apagar a escolha, veio %v", got)
 	}
 
 	// Seguindo também o jogo (com tudo), passa a receber o início
-	must(SubscribeMatch(ctx, "teste-push-1", m, nil, false))
+	must(SubscribeMatch(ctx, Device("teste-push-1"), m, nil, false))
 	if got := tokens("start"); !reflect.DeepEqual(got, both) {
 		t.Errorf("quem segue por dois caminhos recebe se qualquer um pedir, veio %v", got)
 	}
 
-	subs, err := GetPushSubscriptions(ctx, "teste-push-1")
+	subs, err := GetPushSubscriptions(ctx, Device("teste-push-1"))
 	must(err)
 	if got := subs.Kinds.Teams[strconv.FormatInt(tstHome, 10)]; !reflect.DeepEqual(got, []string{"goal", "end"}) {
 		t.Errorf("GET: tipos do time, veio %v", got)
@@ -65,8 +65,8 @@ func TestPushTiposDeAviso(t *testing.T) {
 	}
 
 	// Voltar a receber todos
-	must(SubscribeTeam(ctx, "teste-push-1", tstHome, nil, true))
-	if subs, _ := GetPushSubscriptions(ctx, "teste-push-1"); len(subs.Kinds.Teams) != 0 {
+	must(SubscribeTeam(ctx, Device("teste-push-1"), tstHome, nil, true))
+	if subs, _ := GetPushSubscriptions(ctx, Device("teste-push-1")); len(subs.Kinds.Teams) != 0 {
 		t.Errorf("depois de voltar a receber todos, o time não deveria ter tipos, veio %v", subs.Kinds.Teams)
 	}
 
@@ -86,7 +86,7 @@ func TestPushCartaoVermelho(t *testing.T) {
 	ctx := context.Background()
 	m := newTestMatch(t, 7770601, -30*time.Minute, "IN_PLAY", 1, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
-	if err := SubscribeMatch(ctx, "teste-push-1", m, nil, false); err != nil {
+	if err := SubscribeMatch(ctx, Device("teste-push-1"), m, nil, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,7 +140,7 @@ func TestPushCartaoVermelho(t *testing.T) {
 
 	// Jogo de dois dias atrás (ex: carga de jogos antigos): nada
 	old := newTestMatch(t, 7770602, -48*time.Hour, "FINISHED", 0, 0)
-	if err := SubscribeMatch(ctx, "teste-push-1", old, nil, false); err != nil {
+	if err := SubscribeMatch(ctx, Device("teste-push-1"), old, nil, false); err != nil {
 		t.Fatal(err)
 	}
 	antigo := jogo
@@ -181,8 +181,8 @@ func TestPushPenaltisEIntervalo(t *testing.T) {
 	m := newTestMatch(t, 7770701, -50*time.Minute, "IN_PLAY", 0, 0)
 	newTestDevice(t, "teste-push-1", "ExponentPushToken[t1]")
 	newTestDevice(t, "teste-push-2", "ExponentPushToken[t2]")
-	SubscribeMatch(ctx, "teste-push-1", m, nil, false)
-	SubscribeMatch(ctx, "teste-push-2", m, []string{"goal"}, true)
+	SubscribeMatch(ctx, Device("teste-push-1"), m, nil, false)
+	SubscribeMatch(ctx, Device("teste-push-2"), m, []string{"goal"}, true)
 
 	avisos := func() []string {
 		t.Helper()
@@ -244,7 +244,7 @@ func TestPushPenaltisEIntervalo(t *testing.T) {
 
 	// Worker que subiu no 2º tempo: o intervalo que já passou não avisa
 	m2 := newTestMatch(t, 7770702, -80*time.Minute, "IN_PLAY", 0, 0)
-	SubscribeMatch(ctx, "teste-push-1", m2, nil, false)
+	SubscribeMatch(ctx, Device("teste-push-1"), m2, nil, false)
 	jogo2 := jogo
 	jogo2.MatchID = "9990702"
 	jogo2.MatchDate = time.Now().UTC().Add(-80 * time.Minute).Format("2006-01-02T15:04Z")

@@ -34,10 +34,14 @@ func GenerateToken(deviceID string) (string, error) {
 	return signClaims(&Claims{DeviceID: deviceID, Role: models.RoleGuest}, 30*24*time.Hour)
 }
 
-// GenerateUserToken cria o token de quem fez login. Dura menos que o de convidado
-// porque pode carregar o papel de admin.
-func GenerateUserToken(userID int64, role string) (string, error) {
-	return signClaims(&Claims{UserID: userID, Role: role}, 7*24*time.Hour)
+// GenerateUserToken cria o token de quem entrou na conta, com o aparelho (para o push). O
+// de admin dura 7 dias; o de usuário, 30, como o de convidado (e se renova em /auth/refresh)
+func GenerateUserToken(userID int64, role, deviceID string) (string, error) {
+	duration := 30 * 24 * time.Hour
+	if role == models.RoleAdmin {
+		duration = 7 * 24 * time.Hour
+	}
+	return signClaims(&Claims{UserID: userID, Role: role, DeviceID: deviceID}, duration)
 }
 
 func signClaims(claims *Claims, duration time.Duration) (string, error) {
