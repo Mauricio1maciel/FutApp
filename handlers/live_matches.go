@@ -6,8 +6,7 @@ import (
 	"App-Futebol/utils"
 	"encoding/json"
 	"net/http"
-
-	"github.com/patrickmn/go-cache"
+	"time"
 )
 
 func LiveMatchesHandler(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +38,9 @@ func LiveMatchesHandler(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusInternalServerError, "Erro ao processar dados")
 		return
 	}
-	utils.AppCache.Set(cacheKey, jsonBytes, cache.DefaultExpiration)
+	// 15 s: o app recarrega o ao vivo a cada 15 s (com o 304, a resposta igual quase não
+	// gasta internet), e o gol aparece em até 15 s depois de a ESPN atualizar
+	utils.AppCache.Set(cacheKey, jsonBytes, 15*time.Second)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Cache", "MISS")
 	w.Write(jsonBytes)

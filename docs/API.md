@@ -147,7 +147,7 @@ Parâmetros entre `[colchetes]` são opcionais. `season` vazio = temporada mais 
 | `GET /team/stats` | `id` (api_id), `[season]` | estatísticas do time na temporada (veja abaixo) |
 | `GET /team/cards` | `id` (api_id), `league`, `[season]` | pendurados e suspensos do time na competição (veja abaixo) |
 | `GET /matches/calendar` | `leagues=BSA,PL`, `month=MM`, `year=YYYY` | `[{"date", "count"}]` |
-| `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 30s), com o relógio e os pênaltis da disputa (veja abaixo). Aqui `id_event` **e** `match_id` são o ID da ESPN |
+| `GET /matches/live` | `league`, `[date=YYYYMMDD]` | lista de jogos ao vivo (ESPN, cache de 15 s), com o relógio e os pênaltis da disputa (veja abaixo). Aqui `id_event` **e** `match_id` são o ID da ESPN |
 | `GET /match/history` | `id` (ID ESPN), `league` | `{"match", "lineups", "events", "statistics"}` |
 | `GET /match/commentary` | `id` (ID ESPN) | narração lance a lance em português, do mais recente para o mais antigo (veja abaixo) |
 | `GET /match/preview` | `match_id` (nosso) ou `id` (ID ESPN) | prévia do jogo: chances, posição, forma, confronto direto, suspensos e artilheiros (veja abaixo) |
@@ -424,7 +424,7 @@ relógio andar sozinho entre uma atualização e outra:
   "home_penalty": 2, "away_penalty": 3 }
 ```
 - `clock_seconds`: segundos de jogo quando a ESPN foi lida, em `clock_at` (UTC). A resposta
-  fica até 30 s no cache: conte a partir de `clock_at`, não da hora em que o app recebeu.
+  fica até 15 s no cache: conte a partir de `clock_at`, não da hora em que o app recebeu.
 - `period`: 1 e 2 são os tempos; 3 e 4, a prorrogação; 5, a disputa de pênaltis.
 - `clock_running`: `false` no intervalo, entre o tempo normal e a prorrogação, nos pênaltis
   e com o jogo parado. Aí mostre o `clock` (ou "Intervalo"/"Pênaltis") sem contar.
