@@ -61,7 +61,7 @@ Supabase ou com `psql`). Não rode o `000_schema_base.sql`.
 | 030_avisos_de_penalti_e_intervalo_e_lance_a_lance | ✅ |
 | 031_videos_dos_jogos | ✅ |
 | 032_resultado_travado_e_wo_medellin_flamengo | ✅ (rodar de novo depois de atualizar o worker) |
-| 033_contas_de_usuario | ⏳ |
+| 033_contas_de_usuario | ✅ |
 
 ## Testes de integração
 
